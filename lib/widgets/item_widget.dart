@@ -39,8 +39,26 @@ class _ItemWidgetState extends State<ItemWidget> {
       itemContent = DragTarget<String>(
         onWillAcceptWithDetails: (details) {
           final connectionData = details.data;
-          final isConnection = connectionData.startsWith('connection_');
-          return isConnection;
+          if (!connectionData.startsWith('connection_')){
+            print('Invalid connection data: $connectionData');
+            return false;
+          }
+
+          // Phân tích chuỗi dữ liệu mới: 'connection_id_columnId'
+          final parts = connectionData.split('_');
+          if (parts.length < 3) {
+            print('Invalid connection data format: $connectionData');
+            return false;
+          }
+
+          final fromItemId = parts[1];
+          final fromColumnId = int.tryParse(parts[2]) ?? -1;
+          final toColumnId = widget.item.columnId;
+
+          // Quy tắc: Không tự nối, và cột đích phải lớn hơn cột nguồn
+          final canAccept =
+              fromItemId != widget.item.id && toColumnId >= fromColumnId;
+          return canAccept;
         },
         onAcceptWithDetails: (details) {
           final connectionData = details.data;
@@ -50,7 +68,6 @@ class _ItemWidgetState extends State<ItemWidget> {
           );
         },
         builder: (context, candidateData, rejectedData) {
-         
           return _buildItemContent(
             context,
             key: widget.itemKey,
@@ -71,7 +88,10 @@ class _ItemWidgetState extends State<ItemWidget> {
         children: [
           GestureDetector(
             onDoubleTap: () {
-              context.read<DragDropBloc>().add(HighlightChain(itemId: widget.item.id));
+              if (widget.item.columnId > 1)
+                context.read<DragDropBloc>().add(
+                  HighlightChain(itemId: widget.item.id),
+                );
             },
             child: Draggable<Item>(
               data: widget.item,
@@ -83,7 +103,7 @@ class _ItemWidgetState extends State<ItemWidget> {
                 data: Theme.of(context), // Cung cấp Theme cho feedback
                 child: Material(
                   color: Colors.transparent,
-            
+
                   child: _buildItemContent(context, isDragging: true),
                 ),
               ),
@@ -123,11 +143,15 @@ class _ItemWidgetState extends State<ItemWidget> {
                 decoration: BoxDecoration(
                   color: widget.isHighlighted
                       ? Colors.red.shade100
-                      : (isTargetForConnection ? Colors.green.shade100 : Colors.blue.shade100),
+                      : (isTargetForConnection
+                            ? Colors.green.shade100
+                            : Colors.blue.shade100),
                   borderRadius: BorderRadius.circular(8.0),
                   border: widget.isHighlighted
                       ? Border.all(color: Colors.red.shade700, width: 2)
-                      : (isTargetForConnection ? Border.all(color: Colors.green, width: 2) : null),
+                      : (isTargetForConnection
+                            ? Border.all(color: Colors.green, width: 2)
+                            : null),
                 ),
                 child: Center(
                   child: Text(
@@ -145,7 +169,9 @@ class _ItemWidgetState extends State<ItemWidget> {
                   right: 0,
                   child: InkWell(
                     onTap: () {
-                      context.read<DragDropBloc>().add(RemoveItem(item: widget.item));
+                      context.read<DragDropBloc>().add(
+                        RemoveItem(item: widget.item),
+                      );
                     },
                     customBorder: const CircleBorder(),
                     child: Container(
@@ -153,9 +179,18 @@ class _ItemWidgetState extends State<ItemWidget> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
-                        boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.5), blurRadius: 2)],
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.5),
+                            blurRadius: 2,
+                          ),
+                        ],
                       ),
-                      child: Icon(Icons.close, size: 14, color: Colors.red.shade700),
+                      child: Icon(
+                        Icons.close,
+                        size: 14,
+                        color: Colors.red.shade700,
+                      ),
                     ),
                   ),
                 ),
@@ -166,7 +201,7 @@ class _ItemWidgetState extends State<ItemWidget> {
               opacity: _isHovering && !isDragging ? 1.0 : 0.0,
               duration: const Duration(milliseconds: 200),
               child: Draggable<String>(
-                data: 'connection_${widget.item.id}',
+                data: 'connection_${widget.item.id}_${widget.item.columnId}',
                 onDragStarted: () {
                   widget.onConnectionDragStarted(widget.item.id);
                   context.read<DragCubit>().startDragging();

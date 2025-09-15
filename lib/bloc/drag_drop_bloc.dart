@@ -27,6 +27,39 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
     on<ClearHighlight>(_onClearHighlight);
   }
 
+  Map<String, Set> _calculateHighlightChain(String startItemId, List<Connection> connections) {
+    final itemsToHighlight = <String>{};
+    final connectionsToHighlight = <Connection>{};
+    final queue = Queue<String>();
+    final visited = <String>{};
+
+    queue.add(startItemId);
+    visited.add(startItemId);
+
+    while (queue.isNotEmpty) {
+      final currentItemId = queue.removeFirst();
+      itemsToHighlight.add(currentItemId);
+
+      for (final connection in connections) {
+        if (connection.fromItemId == currentItemId) {
+          connectionsToHighlight.add(connection);
+          if (!visited.contains(connection.toItemId)) {
+            visited.add(connection.toItemId);
+            queue.add(connection.toItemId);
+          }
+        }
+        if (connection.toItemId == currentItemId) {
+          connectionsToHighlight.add(connection);
+          if (!visited.contains(connection.fromItemId)) {
+            visited.add(connection.fromItemId);
+            queue.add(connection.fromItemId);
+          }
+        }
+      }
+    }
+    return {'items': itemsToHighlight, 'connections': connectionsToHighlight};
+  }
+
   void _onLoadItems(LoadItems event, Emitter<DragDropState> emit) {
     final initialItems = List.generate(5, (index) {
       final id = _uuid.v4();
@@ -46,52 +79,58 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
     final item = event.item;
     final fromColumnId = item.columnId;
     final toColumnId = event.targetColumnId;
-
     if (fromColumnId == toColumnId) return;
 
     List<ColumnData> updatedColumns = List.from(state.columns);
-    final connections = List<Connection>.from(state.connections);
-    
+    List<Connection> updatedConnections = List.from(state.connections);
+    Set<String> updatedHighlightedItemIds = Set.from(state.highlightedItemIds);
+    Set<Connection> updatedHighlightedConnections = Set.from(state.highlightedConnections);
+
     int fromIndex = updatedColumns.indexWhere((col) => col.id == fromColumnId);
     int toIndex = updatedColumns.indexWhere((col) => col.id == toColumnId);
-
     if (fromIndex == -1 || toIndex == -1) return;
 
-    // *** LOGIC QUAN TRỌNG ĐÃ ĐƯỢC KHÔI PHỤC VÀ TỔNG QUÁT HÓA ***
-    
-    // TRƯỜNG HỢP 1: HÀNH ĐỘNG SAO CHÉP (COPY)
-    // Áp dụng khi kéo từ một cột không phải nguồn (id > 1) sang một cột có id lớn hơn.
-    if (fromColumnId > 1 && toColumnId > fromColumnId) {
-      // Giữ nguyên item ở cột nguồn.
-      // Tạo một bản sao mới cho cột đích.
-      final newItem = item.copyWith(id: _uuid.v4(), columnId: toColumnId);
-      final targetColumn = updatedColumns[toIndex];
-      
-      // Cập nhật cột đích với item mới
-      updatedColumns[toIndex] = targetColumn.copyWith(items: List.from(targetColumn.items)..add(newItem));
-      
-      // Tạo kết nối giữa item gốc và bản sao
-      connections.add(Connection(fromItemId: item.id, toItemId: newItem.id));
+    // Kiểm tra xem item được kéo có đang được highlight không.
+    final bool wasHighlighted = state.highlightedItemIds.contains(item.id);
 
+    // TRƯỜNG HỢP 1: HÀNH ĐỘNG SAO CHÉP (COPY)
+    if (fromColumnId > 1 && toColumnId > fromColumnId) {
+      final newItem = item.copyWith(id: _uuid.v4(), columnId: toColumnId);
+      final newConnection = Connection(fromItemId: item.id, toItemId: newItem.id);
+      
+      final targetColumn = updatedColumns[toIndex];
+      updatedColumns[toIndex] = targetColumn.copyWith(items: List.from(targetColumn.items)..add(newItem));
+      updatedConnections.add(newConnection);
+
+      // Nếu item gốc được highlight, tự động highlight item mới và kết nối mới.
+      if (wasHighlighted) {
+        updatedHighlightedItemIds.add(newItem.id);
+        updatedHighlightedConnections.add(newConnection);
+      }
     } else { // TRƯỜNG HỢP 2: HÀNH ĐỘNG DI CHUYỂN (MOVE)
       final sourceColumn = updatedColumns[fromIndex];
       final targetColumn = updatedColumns[toIndex];
       
-      // Cập nhật danh sách item của cột nguồn (xóa item)
       final updatedSourceItems = List<Item>.from(sourceColumn.items)..removeWhere((i) => i.id == item.id);
       updatedColumns[fromIndex] = sourceColumn.copyWith(items: updatedSourceItems);
       
-      // Cập nhật danh sách item của cột đích (thêm item)
       final updatedTargetItems = List<Item>.from(targetColumn.items)..add(item.copyWith(columnId: toColumnId));
       updatedColumns[toIndex] = targetColumn.copyWith(items: updatedTargetItems);
     }
     
-    emit(state.copyWith(columns: updatedColumns, connections: connections));
+    emit(state.copyWith(
+      columns: updatedColumns, 
+      connections: updatedConnections,
+      highlightedItemIds: updatedHighlightedItemIds,
+      highlightedConnections: updatedHighlightedConnections,
+    ));
   }
   
   void _onRemoveItem(RemoveItem event, Emitter<DragDropState> emit) {
     final itemToRemove = event.item;
     
+    final bool wasHighlighted = state.highlightedItemIds.contains(itemToRemove.id);
+
     List<ColumnData> updatedColumns = List.from(state.columns);
     List<Connection> updatedConnections = List.from(state.connections)
       ..removeWhere((c) => c.fromItemId == itemToRemove.id || c.toItemId == itemToRemove.id);
@@ -99,10 +138,12 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
     int columnIndex = updatedColumns.indexWhere((col) => col.id == itemToRemove.columnId);
     if (columnIndex == -1) return;
 
+    // Bước 1: Xóa item khỏi cột hiện tại của nó
     final column = updatedColumns[columnIndex];
     final updatedItems = List<Item>.from(column.items)..removeWhere((i) => i.id == itemToRemove.id);
     updatedColumns[columnIndex] = column.copyWith(items: updatedItems);
 
+    // Bước 2: Kiểm tra xem có cần trả item về nguồn không
     final otherInstancesExist = updatedColumns.skip(1).any((col) => col.items.any((i) => i.originalId == itemToRemove.originalId));
                               
     if (!otherInstancesExist) {
@@ -115,22 +156,52 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
           name: itemToRemove.name, 
           columnId: 1
         );
-        final updatedSourceItems = List<Item>.from(sourceColumn.items)..add(originalItem);
-        updatedColumns[0] = sourceColumn.copyWith(items: updatedSourceItems);
+        // Cập nhật danh sách item của cột nguồn một cách an toàn
+        final currentSourceItems = List<Item>.from(updatedColumns[0].items);
+        currentSourceItems.add(originalItem);
+        updatedColumns[0] = updatedColumns[0].copyWith(items: currentSourceItems);
       }
     }
+    // *** KẾT THÚC LOGIC CŨ ***
 
-    emit(state.copyWith(columns: updatedColumns, connections: updatedConnections));
+    // Bước 3: Xử lý highlight
+    if (wasHighlighted) {
+      // Xóa toàn bộ highlight nếu item bị xóa là một phần của chuỗi
+      emit(state.copyWith(
+        columns: updatedColumns, 
+        connections: updatedConnections,
+        highlightedItemIds: {},
+        highlightedConnections: {},
+      ));
+    } else {
+      // Nếu không, chỉ cập nhật cột và kết nối
+      emit(state.copyWith(columns: updatedColumns, connections: updatedConnections));
+    }
   }
   
   void _onAddConnection(AddConnection event, Emitter<DragDropState> emit) {
+    // ... (logic từ câu trả lời trước, không đổi)
     final newConnections = List<Connection>.from(state.connections);
-    if (!newConnections.any((c) => c.fromItemId == event.fromItemId && c.toItemId == event.toItemId)) {
-      newConnections.add(Connection(fromItemId: event.fromItemId, toItemId: event.toItemId));
+    if (newConnections.any((c) => c.fromItemId == event.fromItemId && c.toItemId == event.toItemId)) {
+      return;
+    }
+    
+    newConnections.add(Connection(fromItemId: event.fromItemId, toItemId: event.toItemId));
+    
+    final bool chainAffected = state.highlightedItemIds.contains(event.fromItemId) || 
+                               state.highlightedItemIds.contains(event.toItemId);
+    
+    if (chainAffected) {
+      final highlights = _calculateHighlightChain(event.fromItemId, newConnections);
+      emit(state.copyWith(
+        connections: newConnections,
+        highlightedItemIds: highlights['items'] as Set<String>,
+        highlightedConnections: highlights['connections'] as Set<Connection>,
+      ));
+    } else {
       emit(state.copyWith(connections: newConnections));
     }
   }
-
   void _onAddNewColumn(AddNewColumn event, Emitter<DragDropState> emit) {
     if (state.columns.isEmpty) return;
     
@@ -192,46 +263,14 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
 
   void _onHighlightChain(HighlightChain event, Emitter<DragDropState> emit) {
     if (state.highlightedItemIds.contains(event.itemId)) {
-      emit(state.copyWith(
-        highlightedItemIds: {},
-        highlightedConnections: {},
-      ));
+      add(ClearHighlight());
       return;
     }
-
-    final itemsToHighlight = <String>{};
-    final connectionsToHighlight = <Connection>{};
-    final queue = Queue<String>();
-    final visited = <String>{};
-
-    queue.add(event.itemId);
-    visited.add(event.itemId);
-
-    while (queue.isNotEmpty) {
-      final currentItemId = queue.removeFirst();
-      itemsToHighlight.add(currentItemId);
-
-      for (final connection in state.connections) {
-        if (connection.fromItemId == currentItemId) {
-          connectionsToHighlight.add(connection);
-          if (!visited.contains(connection.toItemId)) {
-            visited.add(connection.toItemId);
-            queue.add(connection.toItemId);
-          }
-        }
-        if (connection.toItemId == currentItemId) {
-          connectionsToHighlight.add(connection);
-          if (!visited.contains(connection.fromItemId)) {
-            visited.add(connection.fromItemId);
-            queue.add(connection.fromItemId);
-          }
-        }
-      }
-    }
-
+    final highlights = _calculateHighlightChain(event.itemId, state.connections);
     emit(state.copyWith(
-      highlightedItemIds: itemsToHighlight,
-      highlightedConnections: connectionsToHighlight,
+      highlightedItemIds: highlights['items'] as Set<String>,
+      highlightedConnections: highlights['connections'] as Set<Connection>,
     ));
   }
+
 }

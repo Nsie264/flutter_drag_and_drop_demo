@@ -111,7 +111,7 @@ class _DragDropScreenState extends State<DragDropScreen> {
                             onConnectionDragStarted: _onConnectionDragStarted,
                             onConnectionDragUpdated: _onConnectionDragUpdated,
                             onConnectionDragEnded: _onConnectionDragEnded,
-                            highlightedItemIds: state.highlightedItemIds,
+                            highlightedItemIds: {},
                           ),
                         ),
                         
