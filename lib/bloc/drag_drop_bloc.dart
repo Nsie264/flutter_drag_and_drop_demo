@@ -1,0 +1,172 @@
+// lib/bloc/drag_drop_bloc.dart
+
+import 'package:bloc/bloc.dart';
+import 'package:drag_and_drop/models/column_data.dart';
+import 'package:drag_and_drop/models/connection.dart';
+import 'package:drag_and_drop/models/item.dart';
+import 'package:equatable/equatable.dart';
+import 'package:uuid/uuid.dart';
+
+part 'drag_drop_event.dart';
+part 'drag_drop_state.dart';
+
+class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
+  final Uuid _uuid = const Uuid();
+
+  DragDropBloc() : super(const DragDropState()) {
+    on<LoadItems>(_onLoadItems);
+    on<ItemDropped>(_onItemDropped);
+    on<RemoveItem>(_onRemoveItem);
+    on<AddConnection>(_onAddConnection);
+    on<AddNewColumn>(_onAddNewColumn);
+    on<RemoveColumn>(_onRemoveColumn);
+  }
+
+  void _onLoadItems(LoadItems event, Emitter<DragDropState> emit) {
+    final initialItems = List.generate(5, (index) {
+      final id = _uuid.v4();
+      return Item(id: id, originalId: id, name: 'Item ${index + 1}', columnId: 1);
+    });
+    
+    final initialColumns = [
+      ColumnData(id: 1, title: 'Nguồn', items: initialItems),
+      const ColumnData(id: 2, title: 'Cột 2'),
+      const ColumnData(id: 3, title: 'Cột 3'),
+    ];
+
+    emit(state.copyWith(columns: initialColumns, connections: []));
+  }
+
+  void _onItemDropped(ItemDropped event, Emitter<DragDropState> emit) {
+    final item = event.item;
+    final fromColumnId = item.columnId;
+    final toColumnId = event.targetColumnId;
+
+    if (fromColumnId == toColumnId) return;
+
+    List<ColumnData> updatedColumns = List.from(state.columns);
+    final connections = List<Connection>.from(state.connections);
+    
+    int fromIndex = updatedColumns.indexWhere((col) => col.id == fromColumnId);
+    int toIndex = updatedColumns.indexWhere((col) => col.id == toColumnId);
+
+    if (fromIndex == -1 || toIndex == -1) return;
+
+    // *** LOGIC QUAN TRỌNG ĐÃ ĐƯỢC KHÔI PHỤC VÀ TỔNG QUÁT HÓA ***
+    
+    // TRƯỜNG HỢP 1: HÀNH ĐỘNG SAO CHÉP (COPY)
+    // Áp dụng khi kéo từ một cột không phải nguồn (id > 1) sang một cột có id lớn hơn.
+    if (fromColumnId > 1 && toColumnId > fromColumnId) {
+      // Giữ nguyên item ở cột nguồn.
+      // Tạo một bản sao mới cho cột đích.
+      final newItem = item.copyWith(id: _uuid.v4(), columnId: toColumnId);
+      final targetColumn = updatedColumns[toIndex];
+      
+      // Cập nhật cột đích với item mới
+      updatedColumns[toIndex] = targetColumn.copyWith(items: List.from(targetColumn.items)..add(newItem));
+      
+      // Tạo kết nối giữa item gốc và bản sao
+      connections.add(Connection(fromItemId: item.id, toItemId: newItem.id));
+
+    } else { // TRƯỜNG HỢP 2: HÀNH ĐỘNG DI CHUYỂN (MOVE)
+      final sourceColumn = updatedColumns[fromIndex];
+      final targetColumn = updatedColumns[toIndex];
+      
+      // Cập nhật danh sách item của cột nguồn (xóa item)
+      final updatedSourceItems = List<Item>.from(sourceColumn.items)..removeWhere((i) => i.id == item.id);
+      updatedColumns[fromIndex] = sourceColumn.copyWith(items: updatedSourceItems);
+      
+      // Cập nhật danh sách item của cột đích (thêm item)
+      final updatedTargetItems = List<Item>.from(targetColumn.items)..add(item.copyWith(columnId: toColumnId));
+      updatedColumns[toIndex] = targetColumn.copyWith(items: updatedTargetItems);
+    }
+    
+    emit(state.copyWith(columns: updatedColumns, connections: connections));
+  }
+  
+  void _onRemoveItem(RemoveItem event, Emitter<DragDropState> emit) {
+    final itemToRemove = event.item;
+    
+    List<ColumnData> updatedColumns = List.from(state.columns);
+    List<Connection> updatedConnections = List.from(state.connections)
+      ..removeWhere((c) => c.fromItemId == itemToRemove.id || c.toItemId == itemToRemove.id);
+
+    int columnIndex = updatedColumns.indexWhere((col) => col.id == itemToRemove.columnId);
+    if (columnIndex == -1) return;
+
+    final column = updatedColumns[columnIndex];
+    final updatedItems = List<Item>.from(column.items)..removeWhere((i) => i.id == itemToRemove.id);
+    updatedColumns[columnIndex] = column.copyWith(items: updatedItems);
+
+    final otherInstancesExist = updatedColumns.skip(1).any((col) => col.items.any((i) => i.originalId == itemToRemove.originalId));
+                              
+    if (!otherInstancesExist) {
+      final sourceColumn = state.sourceColumn;
+      final isAlreadyInSource = sourceColumn.items.any((i) => i.originalId == itemToRemove.originalId);
+      if (!isAlreadyInSource) {
+        final originalItem = Item(
+          id: itemToRemove.originalId, 
+          originalId: itemToRemove.originalId, 
+          name: itemToRemove.name, 
+          columnId: 1
+        );
+        final updatedSourceItems = List<Item>.from(sourceColumn.items)..add(originalItem);
+        updatedColumns[0] = sourceColumn.copyWith(items: updatedSourceItems);
+      }
+    }
+
+    emit(state.copyWith(columns: updatedColumns, connections: updatedConnections));
+  }
+  
+  void _onAddConnection(AddConnection event, Emitter<DragDropState> emit) {
+    final newConnections = List<Connection>.from(state.connections);
+    if (!newConnections.any((c) => c.fromItemId == event.fromItemId && c.toItemId == event.toItemId)) {
+      newConnections.add(Connection(fromItemId: event.fromItemId, toItemId: event.toItemId));
+      emit(state.copyWith(connections: newConnections));
+    }
+  }
+
+  void _onAddNewColumn(AddNewColumn event, Emitter<DragDropState> emit) {
+    if (state.columns.isEmpty) return;
+    
+    final newId = (state.columns.map((c) => c.id).reduce((a, b) => a > b ? a : b)) + 1;
+    final newColumn = ColumnData(id: newId, title: 'Cột $newId');
+    
+    final updatedColumns = List<ColumnData>.from(state.columns)..add(newColumn);
+    emit(state.copyWith(columns: updatedColumns));
+  }
+
+  void _onRemoveColumn(RemoveColumn event, Emitter<DragDropState> emit) {
+    if (event.columnId <= 1) return;
+
+    List<ColumnData> updatedColumns = List.from(state.columns);
+    int removeIndex = updatedColumns.indexWhere((col) => col.id == event.columnId);
+    if (removeIndex == -1) return;
+
+    final columnToRemove = updatedColumns[removeIndex];
+    final itemsToReturn = columnToRemove.items;
+    
+    List<Connection> updatedConnections = List<Connection>.from(state.connections);
+    final itemIdsToRemove = itemsToReturn.map((item) => item.id).toSet();
+    updatedConnections.removeWhere((conn) => itemIdsToRemove.contains(conn.fromItemId) || itemIdsToRemove.contains(conn.toItemId));
+
+    final sourceColumn = state.sourceColumn;
+    final updatedSourceItems = List<Item>.from(sourceColumn.items);
+
+    for (var item in itemsToReturn) {
+      final otherInstancesExist = updatedColumns.where((c) => c.id != event.columnId && c.id > 1)
+                                                .any((c) => c.items.any((i) => i.originalId == item.originalId));
+
+      if (!otherInstancesExist && !updatedSourceItems.any((sourceItem) => sourceItem.originalId == item.originalId)) {
+        updatedSourceItems.add(
+          Item(id: item.originalId, originalId: item.originalId, name: item.name, columnId: 1)
+        );
+      }
+    }
+    
+    updatedColumns[0] = sourceColumn.copyWith(items: updatedSourceItems);
+    updatedColumns.removeAt(removeIndex);
+    
+    emit(state.copyWith(columns: updatedColumns, connections: updatedConnections));
+  }
+}
