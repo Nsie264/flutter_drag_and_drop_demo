@@ -111,6 +111,7 @@ class _DragDropScreenState extends State<DragDropScreen> {
                             onConnectionDragStarted: _onConnectionDragStarted,
                             onConnectionDragUpdated: _onConnectionDragUpdated,
                             onConnectionDragEnded: _onConnectionDragEnded,
+                            highlightedItemIds: state.highlightedItemIds,
                           ),
                         ),
                         
@@ -142,6 +143,7 @@ class _DragDropScreenState extends State<DragDropScreen> {
                                     onConnectionDragStarted: _onConnectionDragStarted,
                                     onConnectionDragUpdated: _onConnectionDragUpdated,
                                     onConnectionDragEnded: _onConnectionDragEnded,
+                                    highlightedItemIds: state.highlightedItemIds,
                                   );
                                 },
                               ),
@@ -167,6 +169,7 @@ class _DragDropScreenState extends State<DragDropScreen> {
                               dragLineEnd: _dragLineEnd,
                               // Truyền offset cố định vào painter
                               clipOffset: const Offset(sourceColumnWidth, 0),
+                              highlightedConnections: state.highlightedConnections,
                             ),
                           ),
                         ),

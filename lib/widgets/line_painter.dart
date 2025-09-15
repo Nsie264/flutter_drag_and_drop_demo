@@ -12,6 +12,8 @@ class LineAndArrowPainter extends CustomPainter {
   final Offset? dragLineStart;
   final Offset? dragLineEnd;
   final Offset clipOffset;
+  final Set<Connection> highlightedConnections;
+
 
   LineAndArrowPainter({
     required this.connections,
@@ -20,6 +22,7 @@ class LineAndArrowPainter extends CustomPainter {
     this.dragLineStart,
     this.dragLineEnd,
     this.clipOffset = Offset.zero,
+    this.highlightedConnections = const {},
   });
 
   @override
@@ -28,11 +31,19 @@ class LineAndArrowPainter extends CustomPainter {
     // Dịch chuyển canvas ngược lại để hệ tọa độ khớp với Stack gốc
     canvas.translate(-clipOffset.dx, -clipOffset.dy);
 
-    final paint = Paint()
+    final normalPaint = Paint()
       ..color = Colors.blue
       ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
+
+    // "Cây cọ" cho đường nối được highlight
+    final highlightPaint = Paint()
+      ..color = Colors.red.shade700
+      ..strokeWidth = 2.5 // Dày hơn một chút để nổi bật
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
 
     final stackBox = stackKey.currentContext?.findRenderObject() as RenderBox?;
     if (stackBox == null) {
@@ -63,8 +74,8 @@ class LineAndArrowPainter extends CustomPainter {
         path.lineTo(endPoint.dx - 5, endPoint.dy);
 
         path = ArrowPath.make(path: path, tipLength: 12, tipAngle: pi * 0.2);
-        
-        canvas.drawPath(path, paint);
+        final bool isHighlighted = highlightedConnections.contains(connection);
+        canvas.drawPath(path, isHighlighted ? highlightPaint : normalPaint);
       }
     }
     

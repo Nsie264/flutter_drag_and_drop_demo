@@ -1,5 +1,7 @@
 // lib/bloc/drag_drop_bloc.dart
 
+import 'dart:collection';
+
 import 'package:bloc/bloc.dart';
 import 'package:drag_and_drop/models/column_data.dart';
 import 'package:drag_and_drop/models/connection.dart';
@@ -20,6 +22,9 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
     on<AddConnection>(_onAddConnection);
     on<AddNewColumn>(_onAddNewColumn);
     on<RemoveColumn>(_onRemoveColumn);
+    on<ToggleViewMode>(_onToggleViewMode);
+    on<HighlightChain>(_onHighlightChain);
+    on<ClearHighlight>(_onClearHighlight);
   }
 
   void _onLoadItems(LoadItems event, Emitter<DragDropState> emit) {
@@ -168,5 +173,65 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
     updatedColumns.removeAt(removeIndex);
     
     emit(state.copyWith(columns: updatedColumns, connections: updatedConnections));
+  }
+
+  void _onToggleViewMode(ToggleViewMode event, Emitter<DragDropState> emit) {
+    emit(state.copyWith(
+      isViewMode: !state.isViewMode,
+      highlightedItemIds: {},
+      highlightedConnections: {},
+    ));
+  }
+
+  void _onClearHighlight(ClearHighlight event, Emitter<DragDropState> emit) {
+    emit(state.copyWith(
+      highlightedItemIds: {},
+      highlightedConnections: {},
+    ));
+  }
+
+  void _onHighlightChain(HighlightChain event, Emitter<DragDropState> emit) {
+    if (state.highlightedItemIds.contains(event.itemId)) {
+      emit(state.copyWith(
+        highlightedItemIds: {},
+        highlightedConnections: {},
+      ));
+      return;
+    }
+
+    final itemsToHighlight = <String>{};
+    final connectionsToHighlight = <Connection>{};
+    final queue = Queue<String>();
+    final visited = <String>{};
+
+    queue.add(event.itemId);
+    visited.add(event.itemId);
+
+    while (queue.isNotEmpty) {
+      final currentItemId = queue.removeFirst();
+      itemsToHighlight.add(currentItemId);
+
+      for (final connection in state.connections) {
+        if (connection.fromItemId == currentItemId) {
+          connectionsToHighlight.add(connection);
+          if (!visited.contains(connection.toItemId)) {
+            visited.add(connection.toItemId);
+            queue.add(connection.toItemId);
+          }
+        }
+        if (connection.toItemId == currentItemId) {
+          connectionsToHighlight.add(connection);
+          if (!visited.contains(connection.fromItemId)) {
+            visited.add(connection.fromItemId);
+            queue.add(connection.fromItemId);
+          }
+        }
+      }
+    }
+
+    emit(state.copyWith(
+      highlightedItemIds: itemsToHighlight,
+      highlightedConnections: connectionsToHighlight,
+    ));
   }
 }

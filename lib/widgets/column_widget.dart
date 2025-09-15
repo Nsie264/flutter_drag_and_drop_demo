@@ -15,6 +15,7 @@ class ColumnWidget extends StatelessWidget {
   final Function(String itemId) onConnectionDragStarted;
   final Function(DragUpdateDetails) onConnectionDragUpdated;
   final VoidCallback onConnectionDragEnded;
+  final Set<String> highlightedItemIds;
 
   const ColumnWidget({
     super.key,
@@ -26,6 +27,7 @@ class ColumnWidget extends StatelessWidget {
     required this.onConnectionDragStarted,
     required this.onConnectionDragUpdated,
     required this.onConnectionDragEnded,
+    required this.highlightedItemIds,
   });
 
   @override
@@ -107,12 +109,14 @@ class ColumnWidget extends StatelessWidget {
                   clipBehavior: Clip.none, // Quan trọng để nút nối không bị cắt
                   children: items.map((item) {
                     final itemKey = itemKeys[item.id]!;
+                    print("highlightedItemIds: $highlightedItemIds");
                     return ItemWidget(
                       item: item,
                       itemKey: itemKey,
                       onConnectionDragStarted: onConnectionDragStarted,
                       onConnectionDragUpdated: onConnectionDragUpdated,
                       onConnectionDragEnded: onConnectionDragEnded,
+                      isHighlighted: highlightedItemIds.contains(item.id),
                     );
                   }).toList(),
                 ),

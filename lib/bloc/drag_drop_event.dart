@@ -33,7 +33,6 @@ class AddConnection extends DragDropEvent {
   List<Object> get props => [fromItemId, toItemId];
 }
 
-// Thêm sự kiện mới
 class AddNewColumn extends DragDropEvent {}
 
 class RemoveColumn extends DragDropEvent {
@@ -42,3 +41,15 @@ class RemoveColumn extends DragDropEvent {
   @override
   List<Object> get props => [columnId];
 }
+
+// Events mới cho Phase 3
+class ToggleViewMode extends DragDropEvent {}
+
+class HighlightChain extends DragDropEvent {
+  final String itemId;
+  const HighlightChain({required this.itemId});
+  @override
+  List<Object> get props => [itemId];
+}
+
+class ClearHighlight extends DragDropEvent {}

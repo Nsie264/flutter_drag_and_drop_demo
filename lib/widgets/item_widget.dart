@@ -12,7 +12,7 @@ class ItemWidget extends StatefulWidget {
   final Function(String itemId) onConnectionDragStarted;
   final Function(DragUpdateDetails) onConnectionDragUpdated;
   final VoidCallback onConnectionDragEnded;
-
+  final bool isHighlighted;
   const ItemWidget({
     super.key,
     required this.item,
@@ -20,6 +20,7 @@ class ItemWidget extends StatefulWidget {
     required this.onConnectionDragStarted,
     required this.onConnectionDragUpdated,
     required this.onConnectionDragEnded,
+    this.isHighlighted = false,
   });
 
   @override
@@ -68,25 +69,30 @@ class _ItemWidgetState extends State<ItemWidget> {
       onExit: (_) => setState(() => _isHovering = false),
       child: Row(
         children: [
-          Draggable<Item>(
-            data: widget.item,
-            onDragStarted: () => context.read<DragCubit>().startDragging(),
-            onDragEnd: (details) => context.read<DragCubit>().endDragging(),
-            onDraggableCanceled: (v, o) =>
-                context.read<DragCubit>().endDragging(),
-            feedback: Theme(
-              data: Theme.of(context), // Cung cấp Theme cho feedback
-              child: Material(
-                color: Colors.transparent,
-
-                child: _buildItemContent(context, isDragging: true),
+          GestureDetector(
+            onDoubleTap: () {
+              context.read<DragDropBloc>().add(HighlightChain(itemId: widget.item.id));
+            },
+            child: Draggable<Item>(
+              data: widget.item,
+              onDragStarted: () => context.read<DragCubit>().startDragging(),
+              onDragEnd: (details) => context.read<DragCubit>().endDragging(),
+              onDraggableCanceled: (v, o) =>
+                  context.read<DragCubit>().endDragging(),
+              feedback: Theme(
+                data: Theme.of(context), // Cung cấp Theme cho feedback
+                child: Material(
+                  color: Colors.transparent,
+            
+                  child: _buildItemContent(context, isDragging: true),
+                ),
               ),
+              childWhenDragging: Opacity(
+                opacity: 0.5,
+                child: _buildItemContent(context, key: widget.itemKey),
+              ),
+              child: itemContent,
             ),
-            childWhenDragging: Opacity(
-              opacity: 0.5,
-              child: _buildItemContent(context, key: widget.itemKey),
-            ),
-            child: itemContent,
           ),
         ],
       ),
@@ -115,13 +121,13 @@ class _ItemWidgetState extends State<ItemWidget> {
                 margin: const EdgeInsets.only(top: 4, bottom: 4),
                 padding: const EdgeInsets.all(8.0),
                 decoration: BoxDecoration(
-                  color: isTargetForConnection
-                      ? Colors.green.shade100
-                      : Colors.blue.shade100,
+                  color: widget.isHighlighted
+                      ? Colors.red.shade100
+                      : (isTargetForConnection ? Colors.green.shade100 : Colors.blue.shade100),
                   borderRadius: BorderRadius.circular(8.0),
-                  border: isTargetForConnection
-                      ? Border.all(color: Colors.green, width: 2)
-                      : null,
+                  border: widget.isHighlighted
+                      ? Border.all(color: Colors.red.shade700, width: 2)
+                      : (isTargetForConnection ? Border.all(color: Colors.green, width: 2) : null),
                 ),
                 child: Center(
                   child: Text(
