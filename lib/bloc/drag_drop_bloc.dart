@@ -85,30 +85,50 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
 
 
   void _onLoadItems(LoadItems event, Emitter<DragDropState> emit) {
+    debugPrint('\n\n--- BẮT ĐẦU _onLoadItems ---');
     final List<Item> initialSourceItems = [];
-    final Map<String, String> parentInstanceIds = {};
+    // Map<originalId, instanceId>
+    final Map<String, String> instanceIdMap = {};
 
-    // PASS 1: Tạo các item cha (level 1)
-    for (final template in _masterTemplateItems) {
-      if (template.itemLevel == 1) {
-        final newId = _uuid.v4();
-        parentInstanceIds[template.originalId] = newId;
-        initialSourceItems.add(template.copyWith(id: newId, columnId: 1));
-      }
-    }
+    final sortedTemplates = List<Item>.from(_masterTemplateItems)
+      ..sort((a, b) => a.itemLevel.compareTo(b.itemLevel));
 
-    // PASS 2: Tạo các item con (level 2) và liên kết chúng với cha
-    for (final template in _masterTemplateItems) {
+    debugPrint('--- Đã sắp xếp templates theo level ---');
+    for (final template in sortedTemplates) {
+      debugPrint('  - Đang xử lý: "${template.name}" (Level ${template.itemLevel})');
+      
+      final newId = _uuid.v4();
+      instanceIdMap[template.originalId] = newId;
+      
+      String? parentInstanceId;
+      
       if (template.itemLevel == 2) {
-        final parentOriginalId =
-            '${template.originalId.split('-')[0]}-00-00-000';
-        final parentId = parentInstanceIds[parentOriginalId];
-        if (parentId != null) {
-          initialSourceItems.add(
-            template.copyWith(id: _uuid.v4(), columnId: 1, parentId: parentId),
-          );
-        }
+        final parentOriginalId = '${template.originalId.split('-')[0]}-00-00-000';
+        parentInstanceId = instanceIdMap[parentOriginalId];
+        debugPrint('    Level 2 - Tìm cha với originalId: $parentOriginalId. Tìm thấy instanceId: ${parentInstanceId != null}');
+      } else if (template.itemLevel == 3) {
+        final parts = template.originalId.split('-');
+        final parentOriginalId = '${parts[0]}-${parts[1]}-00-000';
+        parentInstanceId = instanceIdMap[parentOriginalId];
+        debugPrint('    Level 3 - Tìm cha với originalId: $parentOriginalId. Tìm thấy instanceId: ${parentInstanceId != null}');
+      } else if (template.itemLevel == 4) {
+        final parts = template.originalId.split('-');
+        final parentOriginalId = '${parts[0]}-${parts[1]}-${parts[2]}-000';
+        parentInstanceId = instanceIdMap[parentOriginalId];
+        debugPrint('    Level 4 - Tìm cha với originalId: $parentOriginalId. Tìm thấy instanceId: ${parentInstanceId != null}');
       }
+
+      initialSourceItems.add(template.copyWith(
+        id: newId,
+        columnId: 1,
+        parentId: parentInstanceId,
+      ));
+    }
+    
+    debugPrint('\n--- KẾT QUẢ TẠO DỮ LIỆU BAN ĐẦU ---');
+    debugPrint('Tổng số item được tạo: ${initialSourceItems.length}');
+    for (final i in initialSourceItems) {
+        debugPrint('  - "${i.name}" (ID: ${i.id.substring(0,8)}, ParentID: ${i.parentId?.substring(0,8) ?? 'null'})');
     }
 
     final initialColumns = [
@@ -117,12 +137,8 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
       const ColumnData(id: 3, title: 'Cột 3', items: []),
     ];
 
-    emit(
-      state.copyWith(
-        masterItems: _masterTemplateItems,
-        columns: initialColumns,
-      ),
-    );
+    debugPrint('--- KẾT THÚC _onLoadItems ---\n\n');
+    emit(state.copyWith(masterItems: _masterTemplateItems, columns: initialColumns));
   }
 
 List<Item> _findAllInstanceDescendants(String parentInstanceId, List<Item> itemList) {
