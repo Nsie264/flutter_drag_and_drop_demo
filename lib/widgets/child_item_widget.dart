@@ -39,7 +39,7 @@ class ChildItemWidget extends StatelessWidget {
         final isTargetForLink = candidateData.isNotEmpty;
         return Draggable<Item>(
           data: item,
-          feedback: _buildBox(context, isDragging: true),
+          feedback: Material(color: Colors.transparent, child: _buildBox(context, isDragging: true)),
           childWhenDragging: Opacity(opacity: 0.5, child: _buildBox(context)),
           onDragStarted: () => context.read<DragCubit>().startDragging(),
           onDragEnd: (_) => context.read<DragCubit>().endDragging(),
