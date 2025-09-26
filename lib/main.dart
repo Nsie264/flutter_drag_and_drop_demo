@@ -19,7 +19,7 @@ class MyApp extends StatelessWidget {
       home: MultiBlocProvider(
         providers: [
           BlocProvider(
-            create: (context) => DragDropBloc()..add(LoadItems()),
+            create: (context) => DragDropBloc(),
           ),
           BlocProvider(
             create: (context) => DragCubit(),
