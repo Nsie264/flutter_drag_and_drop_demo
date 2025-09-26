@@ -46,10 +46,10 @@ class ParentItemWidget extends StatelessWidget {
             // Cung cấp một theme để feedback không bị lỗi font/style
             child: Theme(
               data: Theme.of(context),
-              child: _buildBox(context, isDragging: true),
+              child: _buildBox(context, isDragging: true, forFeedback: true),
             ),
           ),
-          childWhenDragging: Opacity(opacity: 0.5, child: _buildBox(context)),
+          childWhenDragging: Opacity(opacity: 0.5, child: _buildBox(context, key: parentKey)),
           onDragStarted: () => context.read<DragCubit>().startDragging(),
           onDragEnd: (_) => context.read<DragCubit>().endDragging(),
           onDraggableCanceled: (_, __) => context.read<DragCubit>().endDragging(), // Thêm cái này
@@ -59,7 +59,7 @@ class ParentItemWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildBox(BuildContext context, {Key? key, bool isDragging = false, bool isTargetForLink = false}) {
+  Widget _buildBox(BuildContext context, {Key? key, bool isDragging = false, bool isTargetForLink = false, bool forFeedback = false}) {
     return Container(
       key: key,
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -82,16 +82,14 @@ class ParentItemWidget extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(parentItem.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-          if (childItems.isNotEmpty) ...[
+          // Chỉ render con nếu không phải là feedback
+          if (childItems.isNotEmpty && !forFeedback) ...[
             const SizedBox(height: 4),
-            // *** THAY ĐỔI CHÍNH Ở ĐÂY ***
-            // Thay thế ListView.builder bằng Column
             Column(
               children: childItems.map((child) {
                 final childKey = itemKeys[child.id]!;
-                // Sử dụng ValueKey để giúp Flutter nhận diện widget tốt hơn
                 return ChildItemWidget(
-                  key: ValueKey(child.id), // Thêm key ở đây
+                  key: ValueKey(child.id),
                   item: child,
                   itemKey: childKey
                 );

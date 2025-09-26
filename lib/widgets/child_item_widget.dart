@@ -40,7 +40,7 @@ class ChildItemWidget extends StatelessWidget {
         return Draggable<Item>(
           data: item,
           feedback: Material(color: Colors.transparent, child: _buildBox(context, isDragging: true)),
-          childWhenDragging: Opacity(opacity: 0.5, child: _buildBox(context)),
+          childWhenDragging: Opacity(opacity: 0.5, child: _buildBox(context, key: itemKey)),
           onDragStarted: () => context.read<DragCubit>().startDragging(),
           onDragEnd: (_) => context.read<DragCubit>().endDragging(),
           child: _buildBox(
