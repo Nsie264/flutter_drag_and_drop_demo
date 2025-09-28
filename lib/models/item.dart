@@ -1,12 +1,15 @@
 import 'package:equatable/equatable.dart';
 
 class Item extends Equatable {
-  final String id; // ID duy nhất của instance này
-  final String originalId; // ID của item gốc, để biết các item copy từ đâu
+  final String id;
+  final String originalId;
   final String name;
   final int columnId;
   final String? parentId;
   final String? nextItemId;
+  final bool isGroupPlaceholder;
+  final List<String> linkedChildrenOriginalIds;
+  final bool isUsed;
 
   const Item({
     required this.id,
@@ -15,90 +18,83 @@ class Item extends Equatable {
     required this.columnId,
     this.parentId,
     this.nextItemId,
+    this.isGroupPlaceholder = false,
+    this.linkedChildrenOriginalIds = const [],
+    this.isUsed = false,
   });
+
+  // Getter để tính toán level từ originalId
+  int get itemLevel {
+    final parts = originalId.split('-');
+    if (parts[1] == '00') return 1;
+    if (parts[2] == '00') return 2;
+    if (parts[3] == '000') return 3;
+    return 4;
+  }
+
+  // --- GETTER originalParentId ĐƯỢC CẬP NHẬT VỚI LOGIC "TÌM CHA LÙI" ---
+  /// Tìm originalId của cha.
+  /// Ví dụ: '1-02-01-000' (cấp 3) -> cha là '1-02-00-000' (cấp 2).
+  /// LƯU Ý QUAN TRỌNG: Getter này chỉ xác định ID cha tiềm năng dựa trên cấu trúc chuỗi.
+  /// Nó không đảm bảo item cha đó thực sự tồn tại trong danh sách dữ liệu gốc.
+  String? get potentialParentOriginalId {
+    final parts = originalId.split('-');
+    switch (itemLevel) {
+      case 2:
+        return '${parts[0]}-00-00-000';
+      case 3:
+        return '${parts[0]}-${parts[1]}-00-000';
+      case 4:
+        return '${parts[0]}-${parts[1]}-${parts[2]}-000';
+      default:
+        return null;
+    }
+  }
+  // --------------------------------------------------------------------
+
+  bool isParentOf(String childOriginalId) {
+    // Logic này có thể sẽ cần được xem xét lại khi triển khai BLoC
+    if (itemLevel >= 4) return false;
+    final parentPrefix = originalId.substring(0, (itemLevel * 3));
+    return childOriginalId.startsWith(parentPrefix) && itemLevel < 4;
+  }
 
   Item copyWith({
     String? id,
+    String? originalId,
+    String? name,
     int? columnId,
     String? parentId,
     String? nextItemId,
-
+    bool? isGroupPlaceholder,
+    List<String>? linkedChildrenOriginalIds,
+    bool setParentIdToNull = false,
+    bool setNextItemIdToNull = false,
+    bool? isUsed,
   }) {
     return Item(
       id: id ?? this.id,
-      originalId: originalId,
-      name: name,
+      originalId: originalId ?? this.originalId,
+      name: name ?? this.name,
       columnId: columnId ?? this.columnId,
-      parentId: parentId ?? this.parentId,
-      nextItemId: nextItemId ?? this.nextItemId,
+      parentId: setParentIdToNull ? null : (parentId ?? this.parentId),
+      nextItemId: setNextItemIdToNull ? null : (nextItemId ?? this.nextItemId),
+      isGroupPlaceholder: isGroupPlaceholder ?? this.isGroupPlaceholder,
+      linkedChildrenOriginalIds: linkedChildrenOriginalIds ?? this.linkedChildrenOriginalIds,
+      isUsed: isUsed ?? this.isUsed,
     );
   }
 
-  int get itemLevel {
-    // id có dạng xx-yy-zz-ttt (đều là các chữ số nguyên dương)
-    // xx-00-00-000 là level 1
-    // xx-yy-00-000 là level 2
-    // xx-yy-zz-000 là level 3
-    // xx-yy-zz-ttt là level 4
-    // lưu ý có trường hợp id là xx-00-zz-000 (level 3)
-    // kiểm tra từ dưới lên
-    final parts = originalId.split('-');
-    if (parts.length != 4) return 0;
-    if (parts[3] != '000') return 4;
-    if (parts[2] != '00') return 3;
-    if (parts[1] != '00') return 2;
-    return 1;
-  }
-
-  bool isParentOf(String otherOriginalId) {
-    // lấy tất cả các phần có nghĩa của originalId
-    // ví dụ 1-2-00-000 => 1-2
-    // ví dụ 1-00-00-000 => 1
-
-    final parts = originalId.split('-');
-    if (parts.length != 4) return false;
-    final meaningfulParts = parts.takeWhile((part) => part != '00').toList();
-    final meaningfulOriginalId = meaningfulParts.join('-');
-    return otherOriginalId.startsWith(meaningfulOriginalId);
-  }
-
-  bool isChildOf(String otherOriginalId) {
-    final parts = otherOriginalId.split('-');
-    if (parts.length != 4) return false;
-    final meaningfulParts = parts
-        .takeWhile((part) => part != '00')
-        .toList()
-        .join('-');
-    return originalId.startsWith(meaningfulParts);
-  }
-
-  bool isSiblingOf(String otherOriginalId) {
-    final parts = originalId.split('-');
-    final otherParts = otherOriginalId.split('-');
-    if (parts.length != 4 || otherParts.length != 4) return false;
-
-    // cùng level
-    int level = itemLevel;
-    if (level !=
-        Item(
-          id: '',
-          originalId: otherOriginalId,
-          name: '',
-          columnId: 0,
-        ).itemLevel) {
-      return false;
-    }
-
-    // cùng parent
-    if (level == 1) {
-      return true; // cùng level 1 thì chắc chắn là anh em
-    } else {
-      final parentParts = parts.sublist(0, level - 1);
-      final otherParentParts = otherParts.sublist(0, level - 1);
-      return parentParts.join('-') == otherParentParts.join('-');
-    }
-  }
-
   @override
-  List<Object?> get props => [id, originalId, name, columnId, parentId];
+  List<Object?> get props => [
+        id,
+        originalId,
+        name,
+        columnId,
+        parentId,
+        nextItemId,
+        isGroupPlaceholder,
+        linkedChildrenOriginalIds,
+        isUsed,
+      ];
 }

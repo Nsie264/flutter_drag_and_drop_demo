@@ -16,12 +16,10 @@ class DragCubit extends Cubit<DragState> {
   DragCubit() : super(const DragState());
 
   void startDragging() {
-    print('Cubit: Drag Started');
     emit(const DragState(isDragging: true));
   }
 
   void endDragging() {
-    print('Cubit: Drag Ended');
     emit(const DragState(isDragging: false));
   }
 }

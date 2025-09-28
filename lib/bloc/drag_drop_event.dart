@@ -74,3 +74,13 @@ class GroupItemsRequested extends DragDropEvent {
   @override
   List<Object> get props => [draggedItem, targetItem];
 }
+
+class MergeItemsRequested extends DragDropEvent {
+  final Item draggedItem; // Item đang được kéo
+  final Item targetItem;  // Item (con hoặc cha đại diện) được thả vào
+
+  const MergeItemsRequested({required this.draggedItem, required this.targetItem});
+
+  @override
+  List<Object> get props => [draggedItem, targetItem];
+}

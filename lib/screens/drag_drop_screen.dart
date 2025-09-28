@@ -66,7 +66,7 @@ class _DragDropScreenState extends State<DragDropScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Hierarchical Drag and Drop'),
+        title: const Text('Drag and Drop Screen'),
       ),
       // Bọc toàn bộ body trong một BlocBuilder duy nhất
       body: BlocBuilder<DragDropBloc, DragDropState>(
