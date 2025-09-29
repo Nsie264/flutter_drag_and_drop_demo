@@ -13,7 +13,7 @@ part 'drag_drop_state.dart';
 class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
   final Uuid _uuid = const Uuid();
 
-  final List<Item> _masterTemplateItems = [
+  final List<Item> _defaultMasterTemplateItems = [
     const Item(
       id: '1-00-00-000',
       originalId: '1-00-00-000',
@@ -76,6 +76,7 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
     on<MergeItemsRequested>(_onMergeItemsRequested);
     on<RemoveWorkflowItem>(_onRemoveWorkflowItem);
     on<LevelFilterChanged>(_onLevelFilterChanged);
+    on<LoadItemsFromData>(_onLoadItemsFromData);
 
     // Các handler cũ không còn dùng
     on<LinkItemsRequested>((_, __) {});
@@ -244,73 +245,13 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
   // ===============================================
 
   void _onLoadItems(LoadItems event, Emitter<DragDropState> emit) {
-    debugPrint('\n\n--- BẮT ĐẦU _onLoadItems ---');
-    final List<Item> initialSourceItems = [];
-    final Map<String, String> instanceIdMap = {};
+    // Khi khởi động, dùng dữ liệu mock mặc định
+    _initializeStateWithMasterItems(_defaultMasterTemplateItems, emit);
+  }
 
-    final sortedTemplates = List<Item>.from(_masterTemplateItems)
-      ..sort((a, b) => a.itemLevel.compareTo(b.itemLevel));
-
-    debugPrint('--- Đã sắp xếp templates theo level ---');
-    for (final template in sortedTemplates) {
-      debugPrint(
-        '  - Đang xử lý: "${template.name}" (Level ${template.itemLevel})',
-      );
-
-      final newId = _uuid.v4();
-      instanceIdMap[template.originalId] = newId;
-
-      String? parentInstanceId;
-
-      if (template.itemLevel == 2) {
-        final parentOriginalId =
-            '${template.originalId.split('-')[0]}-00-00-000';
-        parentInstanceId = instanceIdMap[parentOriginalId];
-        debugPrint(
-          '    Level 2 - Tìm cha với originalId: $parentOriginalId. Tìm thấy instanceId: ${parentInstanceId != null}',
-        );
-      } else if (template.itemLevel == 3) {
-        final parts = template.originalId.split('-');
-        final parentOriginalId = '${parts[0]}-${parts[1]}-00-000';
-        parentInstanceId = instanceIdMap[parentOriginalId];
-        debugPrint(
-          '    Level 3 - Tìm cha với originalId: $parentOriginalId. Tìm thấy instanceId: ${parentInstanceId != null}',
-        );
-      } else if (template.itemLevel == 4) {
-        final parts = template.originalId.split('-');
-        final parentOriginalId = '${parts[0]}-${parts[1]}-${parts[2]}-000';
-        parentInstanceId = instanceIdMap[parentOriginalId];
-        debugPrint(
-          '    Level 4 - Tìm cha với originalId: $parentOriginalId. Tìm thấy instanceId: ${parentInstanceId != null}',
-        );
-      }
-
-      initialSourceItems.add(
-        template.copyWith(id: newId, columnId: 1, parentId: parentInstanceId),
-      );
-    }
-
-    debugPrint('\n--- KẾT QUẢ TẠO DỮ LIỆU BAN ĐẦU ---');
-    debugPrint('Tổng số item được tạo: ${initialSourceItems.length}');
-    for (final i in initialSourceItems) {
-      debugPrint(
-        '  - "${i.name}" (ID: ${i.id.substring(0, 8)}, ParentID: ${i.parentId?.substring(0, 8) ?? 'null'})',
-      );
-    }
-
-    final initialColumns = [
-      ColumnData(id: 1, title: 'Nguồn', items: initialSourceItems),
-      const ColumnData(id: 2, title: 'Cột 2', items: []),
-      const ColumnData(id: 3, title: 'Cột 3', items: []),
-    ];
-
-    debugPrint('--- KẾT THÚC _onLoadItems ---\n\n');
-    emit(
-      state.copyWith(
-        masterItems: _masterTemplateItems,
-        columns: initialColumns,
-      ),
-    );
+  void _onLoadItemsFromData(LoadItemsFromData event, Emitter<DragDropState> emit) {
+    // Khi có dữ liệu từ file, dùng dữ liệu mới
+    _initializeStateWithMasterItems(event.newMasterItems, emit);
   }
 
   List<Item> findAllInstanceDescendants(
@@ -326,6 +267,39 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
       descendants.addAll(findAllInstanceDescendants(child.id, itemList));
     }
     return descendants;
+  }
+
+  void _initializeStateWithMasterItems(List<Item> masterItems, Emitter<DragDropState> emit) {
+    final List<Item> initialSourceItems = [];
+    final Map<String, String> instanceIdMap = {};
+
+    final sortedTemplates = List<Item>.from(masterItems)
+      ..sort((a, b) => a.originalId.compareTo(b.originalId));
+
+    for (final template in sortedTemplates) {
+      final newId = _uuid.v4();
+      instanceIdMap[template.originalId] = newId;
+
+      String? parentInstanceId;
+      final actualParent = _findActualParent(template, sortedTemplates);
+      if (actualParent != null) {
+        parentInstanceId = instanceIdMap[actualParent.originalId];
+      }
+
+      initialSourceItems.add(template.copyWith(
+        id: newId,
+        columnId: 1,
+        parentId: parentInstanceId,
+      ));
+    }
+    
+    final initialColumns = [
+      ColumnData(id: 1, title: 'Nguồn', items: initialSourceItems),
+      const ColumnData(id: 2, title: 'Cột 2', items: []),
+      const ColumnData(id: 3, title: 'Cột 3', items: []),
+    ];
+
+    emit(state.copyWith(masterItems: masterItems, columns: initialColumns));
   }
 
   void _onRemoveWorkflowItem(RemoveWorkflowItem event, Emitter<DragDropState> emit) {

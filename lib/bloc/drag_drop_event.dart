@@ -93,3 +93,12 @@ class RemoveWorkflowItem extends DragDropEvent {
   @override
   List<Object> get props => [itemToRemove];
 }
+
+class LoadItemsFromData extends DragDropEvent {
+  final List<Item> newMasterItems;
+
+  const LoadItemsFromData({required this.newMasterItems});
+
+  @override
+  List<Object> get props => [newMasterItems];
+}

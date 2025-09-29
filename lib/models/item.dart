@@ -26,10 +26,32 @@ class Item extends Equatable {
   // Getter để tính toán level từ originalId
   int get itemLevel {
     final parts = originalId.split('-');
-    if (parts[1] == '00') return 1;
-    if (parts[2] == '00') return 2;
-    if (parts[3] == '000') return 3;
-    return 4;
+
+    // Thêm một bước kiểm tra để đảm bảo định dạng ID luôn đúng
+    if (parts.length != 4) {
+      // Trả về một giá trị mặc định hoặc ném ra lỗi nếu ID không hợp lệ
+      // Trả về 0 hoặc 1 là một lựa chọn an toàn.
+      return 1; 
+    }
+
+    // Kiểm tra ngược từ cuối lên.
+    // Nếu phần tử cuối cùng (chi tiết nhất) khác không, nó là level 4.
+    if (parts[3] != '000') {
+      return 4;
+    }
+
+    // Nếu không, kiểm tra phần tử áp chót.
+    if (parts[2] != '00') {
+      return 3;
+    }
+
+    // Tiếp tục kiểm tra ngược lên.
+    if (parts[1] != '00') {
+      return 2;
+    }
+
+    // Nếu tất cả các phần trên đều là "không", nó là level 1.
+    return 1;
   }
 
   // --- GETTER originalParentId ĐƯỢC CẬP NHẬT VỚI LOGIC "TÌM CHA LÙI" ---

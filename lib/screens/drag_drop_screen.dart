@@ -1,6 +1,10 @@
+import 'dart:typed_data';
+
 import 'package:drag_and_drop/bloc/drag_drop_bloc.dart';
+import 'package:drag_and_drop/services/excel_parser.dart';
 import 'package:drag_and_drop/widgets/column_widget.dart';
 import 'package:drag_and_drop/widgets/line_painter.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -33,11 +37,50 @@ class _DragDropScreenState extends State<DragDropScreen> {
     super.dispose();
   }
 
+  Future<void> _pickAndProcessFile() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['xlsx'],
+        withData: true, // Rất quan trọng để đọc file trên web
+      );
+
+      if (result != null && result.files.single.bytes != null) {
+        Uint8List fileBytes = result.files.single.bytes!;
+        
+        // Gọi service để phân tích
+        final parser = ExcelDataParser();
+        final newMasterItems = parser.parseItemsFromExcel(fileBytes);
+
+        if (mounted) {
+          // Gửi event mới đến BLoC
+          context.read<DragDropBloc>().add(LoadItemsFromData(newMasterItems: newMasterItems));
+        }
+      } else {
+        // Người dùng đã hủy việc chọn file
+      }
+    } catch (e) {
+      // Xử lý lỗi (ví dụ: hiển thị SnackBar)
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Lỗi khi xử lý file: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Hierarchical Drag and Drop'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.upload_file),
+            tooltip: 'Tải lên file Excel',
+            onPressed: _pickAndProcessFile,
+          ),
+        ],
       ),
       body: BlocBuilder<DragDropBloc, DragDropState>(
         builder: (context, state) {

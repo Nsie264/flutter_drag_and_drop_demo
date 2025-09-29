@@ -7,15 +7,12 @@ class LineAndArrowPainter extends CustomPainter {
   final List<Item> allItems;
   final Map<String, GlobalKey> itemKeys;
   final GlobalKey stackKey;
-  // BỎ scrollController vì không cần tính toán thủ công nữa
-  // final ScrollController scrollController;
+
 
   LineAndArrowPainter({
     required this.allItems,
     required this.itemKeys,
     required this.stackKey,
-    // Bỏ scrollController
-    // required this.scrollController,
   });
 
   @override
@@ -28,8 +25,6 @@ class LineAndArrowPainter extends CustomPainter {
 
     final stackBox = stackKey.currentContext?.findRenderObject() as RenderBox?;
     if (stackBox == null) return;
-    
-    // BỎ scrollOffset
 
     for (final fromItem in allItems) {
       if (fromItem.nextItemId != null) {
@@ -59,8 +54,6 @@ class LineAndArrowPainter extends CustomPainter {
           final startPoint = stackBox.globalToLocal(globalStart);
           final endPoint = stackBox.globalToLocal(globalEnd);
 
-          // BỎ CÁC DÒNG CỘNG THÊM scrollOffset
-          
           Path path = Path();
           path.moveTo(startPoint.dx + 5, startPoint.dy);
           path.lineTo(endPoint.dx - 5, endPoint.dy);
