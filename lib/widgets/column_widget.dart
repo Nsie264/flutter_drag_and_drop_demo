@@ -5,6 +5,7 @@ import 'package:drag_and_drop/models/item.dart';
 import 'package:drag_and_drop/widgets/child_item_widget.dart';
 import 'package:drag_and_drop/widgets/group_container_widget.dart';
 import 'package:drag_and_drop/widgets/parent_item_widget.dart';
+import 'package:drag_and_drop/widgets/source_expansion_item.dart';
 import 'package:drag_and_drop/widgets/workflow_item_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -96,71 +97,154 @@ class ColumnWidget extends StatelessWidget {
     );
   }
 
+  Widget _buildSourceItemTile(
+    BuildContext context,
+    Item item, {
+    bool isParent = false,
+  }) {
+    return Draggable<Item>(
+      data: item,
+      // Chặn kéo nếu item đã dùng hoặc là cha đã hết con (logic từ ParentItemWidget cũ)
+      // Lưu ý: logic này sẽ được quyết định bên ngoài trước khi gọi hàm này
+      feedback: Material(
+        color: Colors.transparent,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: 250 - 32,
+          ), // Chiều rộng cột nguồn trừ padding
+          child: Container(
+            height: isParent ? 45 : 35,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: item.isUsed
+                  ? Colors.grey.shade300
+                  : (isParent ? Colors.amber.shade100 : Colors.blue.shade100),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                item.name,
+                style: TextStyle(
+                  fontWeight: isParent ? FontWeight.bold : FontWeight.normal,
+                  color: item.isUsed ? Colors.grey.shade600 : Colors.black,
+                  decoration: item.isUsed
+                      ? TextDecoration.lineThrough
+                      : TextDecoration.none,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+      childWhenDragging: Opacity(
+        opacity: 0.5,
+        child: Container(
+          height: isParent ? 45 : 35,
+          margin: const EdgeInsets.symmetric(vertical: 2.0),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: item.isUsed
+                ? Colors.grey.shade300
+                : (isParent ? Colors.amber.shade100 : Colors.blue.shade100),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              item.name,
+              style: TextStyle(
+                fontWeight: isParent ? FontWeight.bold : FontWeight.normal,
+                color: item.isUsed ? Colors.grey.shade600 : Colors.black,
+                decoration: item.isUsed
+                    ? TextDecoration.lineThrough
+                    : TextDecoration.none,
+              ),
+            ),
+          ),
+        ),
+      ),
+      child: Container(
+        height: isParent ? 45 : 35,
+        margin: const EdgeInsets.symmetric(vertical: 2.0),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: item.isUsed
+              ? Colors.grey.shade300
+              : (isParent ? Colors.amber.shade100 : Colors.blue.shade100),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            item.name,
+            style: TextStyle(
+              fontWeight: isParent ? FontWeight.bold : FontWeight.normal,
+              color: item.isUsed ? Colors.grey.shade600 : Colors.black,
+              decoration: item.isUsed
+                  ? TextDecoration.lineThrough
+                  : TextDecoration.none,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Logic render cho Cột Nguồn (giữ nguyên logic cũ)
   Widget _buildSourceColumnContent(BuildContext context) {
+    // 1. Sắp xếp để item đã dùng xuống dưới
     final sortedItems = List<Item>.from(items);
     sortedItems.sort((a, b) {
-      if (a.isUsed && !b.isUsed) return 1; // a đã dùng, đẩy xuống
-      if (!a.isUsed && b.isUsed) return -1; // b đã dùng, đẩy xuống (giữ a)
-      return a.originalId.compareTo(b.originalId); // Giữ thứ tự ban đầu cho các item cùng trạng thái
+      if (a.isUsed && !b.isUsed) return 1;
+      if (!a.isUsed && b.isUsed) return -1;
+      return a.originalId.compareTo(b.originalId);
     });
 
-    final visibleItems = sortedItems // Dùng danh sách đã sắp xếp
-        .where((item) =>
-            item.itemLevel >= displayLevelStart &&
-            item.itemLevel <= displayLevelStart + 1)
+    // 2. Lọc ra các item cha của "Góc nhìn" hiện tại
+    final parentItemsInView = sortedItems
+        .where((item) => item.itemLevel == displayLevelStart)
         .toList();
 
-    final visibleItemsById = {for (var item in visibleItems) item.id: item};
-
-    final List<Item> rootItemsToRender = [];
-    for (final item in visibleItems) {
-      if (item.itemLevel == displayLevelStart ||
-          (item.itemLevel == displayLevelStart + 1 &&
-              (item.parentId == null ||
-                  !visibleItemsById.containsKey(item.parentId)))) {
-        rootItemsToRender.add(item);
-      }
-    }
-
     return ListView.builder(
-      itemCount: rootItemsToRender.length,
+      itemCount: parentItemsInView.length,
       itemBuilder: (context, index) {
-        final rootItem = rootItemsToRender[index];
+        final parentItem = parentItemsInView[index];
 
-        // KHI ITEM LÀ PARENTWIDGET TRONG GÓC NHÌN
-        if (rootItem.itemLevel == displayLevelStart) {
-          // children là các con hiển thị trong góc nhìn hiện tại
-          final children =
-              visibleItems.where((child) => child.parentId == rootItem.id).toList();
+        // 3. Với mỗi item cha, tìm các con trực tiếp của nó trong góc nhìn
+        final childrenInView = sortedItems
+            .where((child) =>
+                child.parentId == parentItem.id &&
+                child.itemLevel == displayLevelStart + 1)
+            .toList();
 
-          // === LOGIC MỚI: KIỂM TRA ĐỂ VÔ HIỆU HÓA CHA ===
-          // Tìm tất cả con cháu của cha này trong TOÀN BỘ CỘT NGUỒN
-          final allDescendantsInSource = context.read<DragDropBloc>().findAllInstanceDescendants(rootItem.id, items);
+        // 4. Quyết định xem có nên cho kéo item cha hay không
+        final allDescendantsInSource = context.read<DragDropBloc>().findAllInstanceDescendants(parentItem.id, items);
+        final bool isDisabledByChildren = allDescendantsInSource.isNotEmpty && allDescendantsInSource.every((d) => d.isUsed);
+        final bool isParentEffectivelyDisabled = parentItem.isUsed || isDisabledByChildren;
 
-          // Cha bị vô hiệu hóa khi:
-          // 1. Bản thân nó đã được đánh dấu isUsed (áp dụng cho cha không có con như "Tạo Yêu cầu").
-          // HOẶC
-          // 2. Nó có con, và TẤT CẢ các con đó đều đã isUsed.
-          final bool isDisabledByChildren = allDescendantsInSource.isNotEmpty && allDescendantsInSource.every((d) => d.isUsed);
-          final bool isParentEffectivelyDisabled = rootItem.isUsed || isDisabledByChildren;
-          
-          
-          return ParentItemWidget(
-            parentItem: rootItem,
-            childItems: children,
-            itemKeys: itemKeys,
-            // Cha sẽ không thể kéo được nếu nó bị vô hiệu hóa
-            isDraggable: !isParentEffectivelyDisabled, 
-          );
-        } else { // KHI ITEM LÀ CHILDWIDGET TRONG GÓC NHÌN
-          return ChildItemWidget(
-            item: rootItem,
-            itemKey: itemKeys[rootItem.id]!,
-            // ChildWidget luôn có thể kéo được (nếu nó chưa isUsed),
-            // trạng thái isDraggable của nó được xử lý bên trong chính nó
+        // 5. Render: Nếu không có con thì render tile thường, có con thì render ExpansionTile
+        if (childrenInView.isEmpty) {
+          // Vẫn bọc trong một widget để giữ khoảng cách đều
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2.0),
+            child: _buildSourceItemTile(context, parentItem, isParent: true),
           );
         }
+
+        return ExpansionTile(
+          key: PageStorageKey(parentItem.id), // Giữ trạng thái mở/đóng
+          tilePadding: EdgeInsets.zero,
+          // Bọc title trong IgnorePointer nếu không cho kéo, để Draggable không bắt sự kiện
+          title: isParentEffectivelyDisabled
+              ? _buildSourceItemTile(context, parentItem, isParent: true)
+              : _buildSourceItemTile(context, parentItem, isParent: true),
+          initiallyExpanded: false,
+          childrenPadding: const EdgeInsets.only(left: 16),
+          children: childrenInView.map((childItem) {
+            return _buildSourceItemTile(context, childItem, isParent: false);
+          }).toList(),
+        );
       },
     );
   }
