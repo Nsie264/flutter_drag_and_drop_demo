@@ -84,3 +84,12 @@ class MergeItemsRequested extends DragDropEvent {
   @override
   List<Object> get props => [draggedItem, targetItem];
 }
+
+class RemoveWorkflowItem extends DragDropEvent {
+  final Item itemToRemove;
+
+  const RemoveWorkflowItem({required this.itemToRemove});
+
+  @override
+  List<Object> get props => [itemToRemove];
+}
