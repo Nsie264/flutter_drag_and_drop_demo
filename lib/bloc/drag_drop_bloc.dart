@@ -251,7 +251,7 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
     );
   }
 
-  List<Item> _findAllInstanceDescendants(
+  List<Item> findAllInstanceDescendants(
     String parentInstanceId,
     List<Item> itemList,
   ) {
@@ -261,7 +261,7 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
         .toList();
     for (final child in children) {
       descendants.add(child);
-      descendants.addAll(_findAllInstanceDescendants(child.id, itemList));
+      descendants.addAll(findAllInstanceDescendants(child.id, itemList));
     }
     return descendants;
   }
@@ -271,11 +271,11 @@ void _onItemDropped(ItemDropped event, Emitter<DragDropState> emit) {
     final fromColumnId = item.columnId;
     final toColumnId = event.targetColumnId;
 
-    // Không cho phép kéo nếu:
-    // - Kéo lùi cột
-    // - Item không thuộc cột nào (columnId == 0)
-    // - Item ở cột nguồn đã bị đánh dấu là "đã sử dụng"
-    if (fromColumnId >= toColumnId || fromColumnId == 0 || item.isUsed) return;
+    if (fromColumnId >= toColumnId || fromColumnId == 0 || (item.columnId == 1 && item.isUsed)) {
+        // Chặn kéo lùi, hoặc kéo item đã dùng TỪ CỘT NGUỒN.
+        // Item đã dùng ở các cột khác vẫn có thể copy (tạo mũi tên mới)
+        return;
+    }
 
     List<ColumnData> updatedColumns = List.from(state.columns);
     final fromIndex = updatedColumns.indexWhere((c) => c.id == fromColumnId);
@@ -286,24 +286,35 @@ void _onItemDropped(ItemDropped event, Emitter<DragDropState> emit) {
     var sourceColumn = updatedColumns[fromIndex];
     var targetColumn = updatedColumns[toIndex];
     
-    // Logic chính: Phân biệt giữa kéo từ Cột Nguồn và các cột khác
-    if (fromColumnId == 1) { // KÉO TỪ CỘT NGUỒN (logic "SỬ DỤNG")
+    if (fromColumnId == 1) { // KÉO TỪ CỘT NGUỒN
         
-        final descendants = _findAllInstanceDescendants(item.id, sourceColumn.items);
-        List<Item> itemsToProcess; // Các item sẽ được tạo ở cột mới
-        Set<String> idsToMarkAsUsed; // ID của các item cần đánh dấu đã dùng ở cột nguồn
+        // Tìm tất cả con cháu của item được kéo, LỌC BỎ những item đã isUsed
+        final descendants = findAllInstanceDescendants(item.id, sourceColumn.items)
+                            .where((d) => !d.isUsed).toList();
 
-        // Kịch bản 1: Kéo một item cha có con
-        if (descendants.isNotEmpty) {
-            itemsToProcess = descendants;
+        List<Item> itemsToProcess; // Các item sẽ được tạo ở cột mới
+        Set<String> idsToMarkAsUsed; // ID của các item cần đánh dấu đã dùng
+
+        // KỊCH BẢN 1: Kéo cha CẤP 1 -> Chỉ chuyển các con/cháu chưa dùng
+        if (item.itemLevel == 1) {
+            itemsToProcess = descendants; // Chỉ các con cháu
             idsToMarkAsUsed = descendants.map((d) => d.id).toSet();
-            idsToMarkAsUsed.add(item.id); // Đánh dấu cả cha là đã dùng
-        } else { // Kịch bản 2: Kéo một item đơn lẻ
-            itemsToProcess = [item];
-            idsToMarkAsUsed = {item.id};
+            // Nếu đã chuyển hết con, đánh dấu cha là đã dùng
+            final allDescendants = findAllInstanceDescendants(item.id, sourceColumn.items);
+            if (allDescendants.every((d) => idsToMarkAsUsed.contains(d.id))) {
+                idsToMarkAsUsed.add(item.id);
+            }
+
+        } else { // KỊCH BẢN 2: Kéo item CẤP > 1 -> Chuyển cả nó và các con/cháu chưa dùng
+            itemsToProcess = [item, ...descendants];
+            idsToMarkAsUsed = itemsToProcess.map((i) => i.id).toSet();
         }
 
-        // Kiểm tra chống trùng lặp originalId cho tất cả các item sẽ được tạo
+        if (itemsToProcess.isEmpty) {
+            debugPrint('BLoC: Không có item nào để xử lý (tất cả con cháu đã được sử dụng).');
+            return;
+        }
+
         final originalIdsToProcess = itemsToProcess.map((i) => i.originalId).toSet();
         final isAnyItemAlreadyInTarget = targetColumn.items.any((i) => originalIdsToProcess.contains(i.originalId));
         if (isAnyItemAlreadyInTarget) {
@@ -311,7 +322,6 @@ void _onItemDropped(ItemDropped event, Emitter<DragDropState> emit) {
             return;
         }
 
-        // Cập nhật Cột Nguồn: Đánh dấu các item là đã sử dụng
         final updatedSourceItems = sourceColumn.items.map((sourceItem) {
             if (idsToMarkAsUsed.contains(sourceItem.id)) {
                 return sourceItem.copyWith(isUsed: true);
@@ -320,16 +330,27 @@ void _onItemDropped(ItemDropped event, Emitter<DragDropState> emit) {
         }).toList();
         sourceColumn = sourceColumn.copyWith(items: updatedSourceItems);
 
-        // Chuẩn bị các item mới cho Cột Đích
         final newItemsForTarget = itemsToProcess.map((itemToClone) => itemToClone.copyWith(
-            id: _uuid.v4(), // FIX: Cấp ID mới để tránh lỗi Duplicate GlobalKey
+            id: _uuid.v4(),
             columnId: toColumnId,
-            parentId: null,
+            parentId: null, // Sẽ cần logic tái cấu trúc parentId sau nếu cần
             setNextItemIdToNull: true,
-            isUsed: false, // Item ở cột mới không phải là "đã dùng"
+            isUsed: false,
         )).toList();
         
-        final updatedTargetItems = List<Item>.from(targetColumn.items)..addAll(newItemsForTarget);
+        // TÁI TẠO CẤU TRÚC parentId cho các item mới
+        final Map<String, String> oldIdToNewIdMap = {};
+        for (int i = 0; i < itemsToProcess.length; i++) {
+          oldIdToNewIdMap[itemsToProcess[i].id] = newItemsForTarget[i].id;
+        }
+        final finalNewItems = newItemsForTarget.map((newItem) {
+            final originalItem = itemsToProcess.firstWhere((i) => oldIdToNewIdMap[i.id] == newItem.id);
+            final newParentId = originalItem.parentId != null ? oldIdToNewIdMap[originalItem.parentId] : null;
+            return newItem.copyWith(parentId: newParentId);
+        }).toList();
+
+
+        final updatedTargetItems = List<Item>.from(targetColumn.items)..addAll(finalNewItems);
         targetColumn = targetColumn.copyWith(items: updatedTargetItems);
 
     } else { // KÉO TỪ CÁC CỘT KHÁC (logic "SAO CHÉP")

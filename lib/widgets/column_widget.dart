@@ -128,21 +128,37 @@ class ColumnWidget extends StatelessWidget {
       itemBuilder: (context, index) {
         final rootItem = rootItemsToRender[index];
 
+        // KHI ITEM LÀ PARENTWIDGET TRONG GÓC NHÌN
         if (rootItem.itemLevel == displayLevelStart) {
-        final children =
-            visibleItems.where((child) => child.parentId == rootItem.id).toList();
-        
-        return ParentItemWidget(
+          // children là các con hiển thị trong góc nhìn hiện tại
+          final children =
+              visibleItems.where((child) => child.parentId == rootItem.id).toList();
+
+          // === LOGIC MỚI: KIỂM TRA ĐỂ VÔ HIỆU HÓA CHA ===
+          // Tìm tất cả con cháu của cha này trong TOÀN BỘ CỘT NGUỒN
+          final allDescendantsInSource = context.read<DragDropBloc>().findAllInstanceDescendants(rootItem.id, items);
+
+          // Cha bị vô hiệu hóa khi:
+          // 1. Bản thân nó đã được đánh dấu isUsed (áp dụng cho cha không có con như "Tạo Yêu cầu").
+          // HOẶC
+          // 2. Nó có con, và TẤT CẢ các con đó đều đã isUsed.
+          final bool isDisabledByChildren = allDescendantsInSource.isNotEmpty && allDescendantsInSource.every((d) => d.isUsed);
+          final bool isParentEffectivelyDisabled = rootItem.isUsed || isDisabledByChildren;
+          
+          
+          return ParentItemWidget(
             parentItem: rootItem,
             childItems: children,
             itemKeys: itemKeys,
-            // isDraggable được quyết định bởi isUsed
-            isDraggable: !rootItem.isUsed, 
-        );
-        } else {
+            // Cha sẽ không thể kéo được nếu nó bị vô hiệu hóa
+            isDraggable: !isParentEffectivelyDisabled, 
+          );
+        } else { // KHI ITEM LÀ CHILDWIDGET TRONG GÓC NHÌN
           return ChildItemWidget(
             item: rootItem,
             itemKey: itemKeys[rootItem.id]!,
+            // ChildWidget luôn có thể kéo được (nếu nó chưa isUsed),
+            // trạng thái isDraggable của nó được xử lý bên trong chính nó
           );
         }
       },
