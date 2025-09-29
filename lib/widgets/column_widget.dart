@@ -201,50 +201,75 @@ class ColumnWidget extends StatelessWidget {
       return a.originalId.compareTo(b.originalId);
     });
 
-    // 2. Lọc ra các item cha của "Góc nhìn" hiện tại
-    final parentItemsInView = sortedItems
-        .where((item) => item.itemLevel == displayLevelStart)
+    // 2. Lọc ra TẤT CẢ các item sẽ hiển thị trong góc nhìn này (cả cha và con)
+    final visibleItems = sortedItems
+        .where((item) =>
+            item.itemLevel >= displayLevelStart &&
+            item.itemLevel <= displayLevelStart + 1)
         .toList();
+    
+    // Map để tra cứu nhanh các item hiển thị bằng ID
+    final visibleItemsById = {for (var item in visibleItems) item.id: item};
+
+    // 3. Xác định các item GỐC cần render ở cấp cao nhất của ListView
+    final List<Item> rootItemsToRender = [];
+    for (final item in visibleItems) {
+      // Một item là "gốc" để render nếu:
+      // a) Nó là cha trong góc nhìn (level == displayLevelStart)
+      // b) Nó là con trong góc nhìn (level > displayLevelStart) NHƯNG cha của nó không có trong danh sách hiển thị
+      if (item.itemLevel == displayLevelStart || (item.parentId == null || !visibleItemsById.containsKey(item.parentId))) {
+        rootItemsToRender.add(item);
+      }
+    }
+
 
     return ListView.builder(
-      itemCount: parentItemsInView.length,
+      itemCount: rootItemsToRender.length,
       itemBuilder: (context, index) {
-        final parentItem = parentItemsInView[index];
+        final rootItem = rootItemsToRender[index];
 
-        // 3. Với mỗi item cha, tìm các con trực tiếp của nó trong góc nhìn
-        final childrenInView = sortedItems
-            .where((child) =>
-                child.parentId == parentItem.id &&
-                child.itemLevel == displayLevelStart + 1)
-            .toList();
+        // 4. KIỂM TRA XEM ITEM GỐC NÀY LÀ CHA HAY CON MỒ CÔI
+        // Nếu nó là một "cha trong góc nhìn"
+        if (rootItem.itemLevel == displayLevelStart) {
+          
+          // Tìm các con trực tiếp của nó trong góc nhìn hiện tại
+          final childrenInView = visibleItems
+              .where((child) => child.parentId == rootItem.id)
+              .toList();
 
-        // 4. Quyết định xem có nên cho kéo item cha hay không
-        final allDescendantsInSource = context.read<DragDropBloc>().findAllInstanceDescendants(parentItem.id, items);
-        final bool isDisabledByChildren = allDescendantsInSource.isNotEmpty && allDescendantsInSource.every((d) => d.isUsed);
-        final bool isParentEffectivelyDisabled = parentItem.isUsed || isDisabledByChildren;
+          // Quyết định xem có nên cho kéo item cha hay không
+          final allDescendantsInSource = context.read<DragDropBloc>().findAllInstanceDescendants(rootItem.id, items);
+          final isDisabledByChildren = allDescendantsInSource.isNotEmpty && allDescendantsInSource.every((d) => d.isUsed);
+          final isParentEffectivelyDisabled = rootItem.isUsed || isDisabledByChildren;
 
-        // 5. Render: Nếu không có con thì render tile thường, có con thì render ExpansionTile
-        if (childrenInView.isEmpty) {
-          // Vẫn bọc trong một widget để giữ khoảng cách đều
+          // Nếu không có con để hiển thị, render nó như một tile thường
+          if (childrenInView.isEmpty) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2.0),
+              child: _buildSourceItemTile(context, rootItem, isParent: true),
+            );
+          }
+          
+          // Nếu có con, render ExpansionTile
+          return ExpansionTile(
+            key: PageStorageKey(rootItem.id),
+            tilePadding: EdgeInsets.zero,
+            title: isParentEffectivelyDisabled
+                ? _buildSourceItemTile(context, rootItem, isParent: true)
+                : _buildSourceItemTile(context, rootItem, isParent: true),
+            initiallyExpanded: false,
+            childrenPadding: const EdgeInsets.only(left: 16),
+            children: childrenInView.map((childItem) {
+              return _buildSourceItemTile(context, childItem, isParent: false);
+            }).toList(),
+          );
+        } else {
+          // Ngược lại, nó là một "con mồ côi trong góc nhìn" -> render nó như một tile độc lập
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 2.0),
-            child: _buildSourceItemTile(context, parentItem, isParent: true),
+            child: _buildSourceItemTile(context, rootItem, isParent: false),
           );
         }
-
-        return ExpansionTile(
-          key: PageStorageKey(parentItem.id), // Giữ trạng thái mở/đóng
-          tilePadding: EdgeInsets.zero,
-          // Bọc title trong IgnorePointer nếu không cho kéo, để Draggable không bắt sự kiện
-          title: isParentEffectivelyDisabled
-              ? _buildSourceItemTile(context, parentItem, isParent: true)
-              : _buildSourceItemTile(context, parentItem, isParent: true),
-          initiallyExpanded: false,
-          childrenPadding: const EdgeInsets.only(left: 16),
-          children: childrenInView.map((childItem) {
-            return _buildSourceItemTile(context, childItem, isParent: false);
-          }).toList(),
-        );
       },
     );
   }
