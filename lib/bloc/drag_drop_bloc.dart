@@ -795,33 +795,30 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
       }
 
       // 4. Duyệt qua tất cả các cột một lần duy nhất và cập nhật tất cả các item gốc
-      debugPrint(
-        '  4. Updating source items... (Dragged Source ID: ${draggedItemSourceId.substring(0, 8)}, Target Source ID: ${targetItemOriginalSourceId.substring(0, 8)})',
-      );
+      debugPrint('  4. Updating source items... (Dragged Source ID: ${draggedItemSourceId.substring(0,8)}, Target Source ID: ${targetItemOriginalSourceId.substring(0,8)})');
       for (var i = 0; i < updatedColumns.length; i++) {
         bool columnWasUpdated = false;
         final List<Item> itemsAfterUpdate = updatedColumns[i].items.map((item) {
-          if (item.id == draggedItemSourceId) {
-            debugPrint(
-              '    - Updating dragged source in Col ${updatedColumns[i].id}',
-            );
+
+          // === LOGIC SỬA LỖI QUAN TRỌNG ===
+          // Chỉ tạo mũi tên (cập nhật nextItemId) nếu item gốc không nằm ở Cột Nguồn
+          if (item.id == draggedItemSourceId && item.columnId > 1) { 
+            debugPrint('    - Updating dragged source in Col ${updatedColumns[i].id}');
             columnWasUpdated = true;
             return item.copyWith(nextItemId: newPlaceholderId);
           }
-          if (item.id == targetItemOriginalSourceId) {
-            debugPrint(
-              '    - Updating target source in Col ${updatedColumns[i].id}',
-            );
+          if (item.id == targetItemOriginalSourceId && item.columnId > 1) {
+            debugPrint('    - Updating target source in Col ${updatedColumns[i].id}');
             columnWasUpdated = true;
             return item.copyWith(nextItemId: newPlaceholderId);
           }
+          // ===============================
+
           return item;
         }).toList();
 
         if (columnWasUpdated) {
-          updatedColumns[i] = updatedColumns[i].copyWith(
-            items: itemsAfterUpdate,
-          );
+           updatedColumns[i] = updatedColumns[i].copyWith(items: itemsAfterUpdate);
         }
       }
     }
