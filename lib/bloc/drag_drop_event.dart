@@ -87,3 +87,25 @@ class UpgradeToPlaceholderRequested extends DragDropEvent {
   @override
   List<Object> get props => [childItem, parentTargetItem];
 }
+
+// Event khi thả một group vào nền cột
+class GroupDropped extends DragDropEvent {
+  final Item representativeItem;
+  final int targetColumnId;
+
+  const GroupDropped({required this.representativeItem, required this.targetColumnId});
+
+  @override
+  List<Object> get props => [representativeItem, targetColumnId];
+}
+
+// Event khi thả một group vào một item khác (để gộp)
+class MergeGroupRequested extends DragDropEvent {
+  final Item representativeItem;
+  final Item targetItem;
+
+  const MergeGroupRequested({required this.representativeItem, required this.targetItem});
+
+  @override
+  List<Object> get props => [representativeItem, targetItem];
+}

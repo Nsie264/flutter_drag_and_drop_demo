@@ -58,7 +58,7 @@ class LineAndArrowPainter extends CustomPainter {
 
           final linePath = Path()
             ..moveTo(startPoint.dx + 5, startPoint.dy)
-            ..lineTo(endPoint.dx - 5, endPoint.dy);
+            ..lineTo(endPoint.dx, endPoint.dy);
 
           canvas.drawPath(
             dashPath(

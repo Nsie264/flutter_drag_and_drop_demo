@@ -23,7 +23,7 @@ class WorkflowItemWidget extends StatelessWidget {
     return DragTarget<Item>(
       onWillAcceptWithDetails: (details) {
         final draggedItem = details.data;
-        final targetItem = item; // Để code dễ đọc hơn
+        final targetItem = item;
 
         // Chặn các hành động không hợp lệ ngay từ đầu
         if (draggedItem.columnId <= 1 ||
@@ -31,22 +31,26 @@ class WorkflowItemWidget extends StatelessWidget {
           return false;
         }
 
-        // Kịch bản 1: Thả vào "anh em" để tạo nhóm
+        // ================ LOGIC CẬP NHẬT ================
+        // Xác định parent originalId của item/group đang được kéo
+        final draggedParentOriginalId = draggedItem.potentialParentOriginalId;
+        if (draggedParentOriginalId == null) return false;
+
+        // Kịch bản 1: Thả vào "anh em"
         final bool canAcceptSibling =
             !targetItem.isGroupPlaceholder &&
             targetItem.originalId != draggedItem.originalId &&
-            targetItem.potentialParentOriginalId ==
-                draggedItem.potentialParentOriginalId;
+            targetItem.potentialParentOriginalId == draggedParentOriginalId;
 
-        // Kịch bản 2: Thả con vào CHA ĐẠI DIỆN (placeholder)
+        // Kịch bản 2: Thả vào CHA ĐẠI DIỆN (placeholder)
         final bool canDropOnParentPlaceholder =
             targetItem.isGroupPlaceholder &&
-            targetItem.originalId == draggedItem.potentialParentOriginalId;
+            targetItem.originalId == draggedParentOriginalId;
 
-        // Kịch bản 3: Thả con vào CHA (dạng thường) để nâng cấp
+        // Kịch bản 3: Thả vào CHA (dạng thường) để nâng cấp
         final bool canUpgradeToPlaceholder =
             !targetItem.isGroupPlaceholder &&
-            targetItem.originalId == draggedItem.potentialParentOriginalId;
+            targetItem.originalId == draggedParentOriginalId;
 
         return canAcceptSibling ||
             canDropOnParentPlaceholder ||
@@ -56,27 +60,36 @@ class WorkflowItemWidget extends StatelessWidget {
         final draggedItem = details.data;
         final targetItem = item;
 
-        // Phân luồng để gửi đúng event dựa trên kịch bản
-        final bool isUpgradeRequest =
-            !targetItem.isGroupPlaceholder &&
-            targetItem.originalId == draggedItem.potentialParentOriginalId;
-
-        if (isUpgradeRequest) {
-          // Gửi event "Nâng cấp thành Placeholder"
+        // PHÂN LUỒNG LOGIC TẠI ĐÂY
+        if (draggedItem.dragMode == DragMode.group) {
+          // Gửi event gộp nhóm
           context.read<DragDropBloc>().add(
-            UpgradeToPlaceholderRequested(
-              childItem: draggedItem,
-              parentTargetItem: targetItem,
-            ),
-          );
-        } else {
-          // Gửi event gộp nhóm thông thường (tạo nhóm hoặc thêm vào nhóm đã có)
-          context.read<DragDropBloc>().add(
-            MergeItemsRequested(
-              draggedItem: draggedItem,
+            MergeGroupRequested(
+              representativeItem: draggedItem,
               targetItem: targetItem,
             ),
           );
+        } else {
+          // Logic cũ cho item đơn
+          final bool isUpgradeRequest =
+              !targetItem.isGroupPlaceholder &&
+              targetItem.originalId == draggedItem.potentialParentOriginalId;
+
+          if (isUpgradeRequest) {
+            context.read<DragDropBloc>().add(
+              UpgradeToPlaceholderRequested(
+                childItem: draggedItem,
+                parentTargetItem: targetItem,
+              ),
+            );
+          } else {
+            context.read<DragDropBloc>().add(
+              MergeItemsRequested(
+                draggedItem: draggedItem,
+                targetItem: targetItem,
+              ),
+            );
+          }
         }
       },
       builder: (context, candidateData, rejectedData) {
@@ -250,7 +263,7 @@ class WorkflowItemWidget extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Đã liên kết: ${item.linkedChildrenOriginalIds.length} mục',
+            'Đã liên kết: ${item.linkedChildrenOriginalIds.length} chi tiết con',
             style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
           ),
         ],

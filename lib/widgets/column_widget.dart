@@ -128,9 +128,20 @@ class ColumnWidget extends StatelessWidget {
         return columnId > item.columnId && !isAlreadyInTarget;
       },
       onAcceptWithDetails: (details) {
-        context
-            .read<DragDropBloc>()
-            .add(ItemDropped(item: details.data, targetColumnId: columnId));
+        final draggedItem = details.data;
+        // PHÂN LUỒNG LOGIC TẠI ĐÂY
+        if (draggedItem.dragMode == DragMode.group) {
+          context.read<DragDropBloc>().add(GroupDropped(
+            representativeItem: draggedItem,
+            targetColumnId: columnId,
+          ));
+        } else {
+          // Logic cũ cho item đơn
+          context.read<DragDropBloc>().add(ItemDropped(
+            item: draggedItem,
+            targetColumnId: columnId,
+          ));
+        }
       },
       builder: (context, candidateData, rejectedData) {
         final isTarget = candidateData.isNotEmpty;

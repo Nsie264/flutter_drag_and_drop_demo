@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 
 enum DragRole { parent, child }
+enum DragMode { single, group }
 class Item extends Equatable {
   final String id;
   final String originalId;
@@ -12,6 +13,7 @@ class Item extends Equatable {
   final List<String> linkedChildrenOriginalIds;
   final bool isUsed;
   final DragRole dragRole;
+  final DragMode dragMode;
 
   const Item({
     required this.id,
@@ -24,6 +26,7 @@ class Item extends Equatable {
     this.linkedChildrenOriginalIds = const [],
     this.isUsed = false,
     this.dragRole = DragRole.child,
+    this.dragMode = DragMode.single,
   });
 
   // Getter để tính toán level từ originalId
@@ -97,6 +100,7 @@ class Item extends Equatable {
     bool setNextItemIdToNull = false,
     bool? isUsed,
     DragRole? dragRole,
+    DragMode? dragMode,
   }) {
     return Item(
       id: id ?? this.id,
@@ -109,6 +113,7 @@ class Item extends Equatable {
       linkedChildrenOriginalIds: linkedChildrenOriginalIds ?? this.linkedChildrenOriginalIds,
       isUsed: isUsed ?? this.isUsed,
       dragRole: dragRole ?? this.dragRole,
+      dragMode: dragMode ?? this.dragMode,
     );
   }
 
@@ -123,5 +128,6 @@ class Item extends Equatable {
         isGroupPlaceholder,
         linkedChildrenOriginalIds,
         isUsed,
+        dragMode,
       ];
 }
