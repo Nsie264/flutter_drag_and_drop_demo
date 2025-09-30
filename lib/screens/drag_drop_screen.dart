@@ -178,16 +178,14 @@ class _DragDropScreenState extends State<DragDropScreen> {
                                                   Container(
                                                     width: otherColumnWidth,
                                                     margin: const EdgeInsets.symmetric(vertical: 8.0),
-                                                    child: Center(
-                                                      child: ElevatedButton.icon(
-                                                        icon: const Icon(Icons.add_box_outlined),
-                                                        label: const Text('Thêm Cột'),
-                                                        onPressed: () {
-                                                          context.read<DragDropBloc>().add(AddNewColumn());
-                                                        },
-                                                        style: ElevatedButton.styleFrom(
-                                                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                                                        ),
+                                                    child: ElevatedButton.icon(
+                                                      icon: const Icon(Icons.add_box_outlined),
+                                                      label: const Text('Thêm Cột'),
+                                                      onPressed: () {
+                                                        context.read<DragDropBloc>().add(AddNewColumn());
+                                                      },
+                                                      style: ElevatedButton.styleFrom(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                                                       ),
                                                     ),
                                                   ),
