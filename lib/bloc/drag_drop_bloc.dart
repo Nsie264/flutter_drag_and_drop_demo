@@ -374,19 +374,16 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
     final fromColumnId = item.columnId;
     final toColumnId = event.targetColumnId;
 
-    debugPrint('\n\n\x1B[35m--- START [_onItemDropped] ---\x1B[0m');
-    debugPrint('  Item Kéo: "${item.name}" (ID: ${item.id.substring(0,8)}, isUsed: ${item.isUsed})');
-    debugPrint('  Từ Cột: $fromColumnId -> Đến Cột: $toColumnId');
-
+    debugPrint('\n\n\x1B[35m--- START [_onItemDropped] (Final Fix) ---\x1B[0m');
+    debugPrint('  Item Kéo: "${item.name}" (Vai trò khi kéo: ${item.dragRole})');
+    
     if (fromColumnId >= toColumnId || fromColumnId == 0 || (item.columnId == 1 && item.isUsed)) {
-        debugPrint('  -> Bị chặn bởi điều kiện an toàn. Kết thúc.');
         return;
     }
 
     List<ColumnData> updatedColumns = List.from(state.columns);
     final fromIndex = updatedColumns.indexWhere((c) => c.id == fromColumnId);
     final toIndex = updatedColumns.indexWhere((c) => c.id == toColumnId);
-
     if (fromIndex == -1 || toIndex == -1) return;
 
     var sourceColumn = updatedColumns[fromIndex];
@@ -397,9 +394,6 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
         List<Item> itemsToProcess;
         Set<String> idsToMarkAsUsed;
 
-        // === LOGIC QUAN TRỌNG: DÙNG VAI TRÒ (dragRole) ĐỂ QUYẾT ĐỊNH ===
-        // KỊCH BẢN 1: Kéo một item có vai trò là PARENT.
-        // Đây là hành động "Phân phát các con trực tiếp".
         if (item.dragRole == DragRole.parent) {
             debugPrint('  \x1B[36m-> Kịch bản 1: Kéo với vai trò PARENT, chỉ chuyển CON TRỰC TIẾP.\x1B[0m');
             final directChildren = sourceColumn.items
@@ -407,28 +401,22 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
                 .toList();
             
             itemsToProcess = directChildren;
+            // === SỬA LỖI QUAN TRỌNG: CHỈ ĐÁNH DẤU CÁC CON ĐƯỢC CHUYỂN ĐI ===
             idsToMarkAsUsed = directChildren.map((d) => d.id).toSet();
-
-            final allDirectChildren = sourceColumn.items.where((child) => child.parentId == item.id).toList();
-            // Cha chỉ bị đánh dấu isUsed nếu nó có con và tất cả con đều đã/sẽ bị dùng
-            if (allDirectChildren.isNotEmpty && allDirectChildren.every((d) => idsToMarkAsUsed.contains(d.id) || d.isUsed)) {
-                debugPrint('    Tất cả con trực tiếp đã/sẽ bị dùng -> Đánh dấu cha "${item.name}" là đã dùng.');
-                idsToMarkAsUsed.add(item.id);
-            }
+            // Đoạn code kiểm tra "allDirectChildren" và thêm item.id đã được XÓA BỎ.
+            // =============================================================
         } 
-        // KỊCH BẢN 2: Kéo một item có vai trò là CHILD.
-        // Đây là hành động "Di chuyển chính nó".
         else { // item.dragRole == DragRole.child
             debugPrint('  \x1B[36m-> Kịch bản 2: Kéo với vai trò CHILD, chỉ chuyển CHÍNH NÓ.\x1B[0m');
             itemsToProcess = [item];
             idsToMarkAsUsed = {item.id};
         }
-        // ==========================================================
 
         if (itemsToProcess.isEmpty) {
             debugPrint('  -> Không có item nào để xử lý. Kết thúc.');
             return;
         }
+
         debugPrint('  Items sẽ được xử lý (${itemsToProcess.length} mục): ${itemsToProcess.map((i) => i.name).join(', ')}');
         
         final originalIdsToProcess = itemsToProcess.map((i) => i.originalId).toSet();
@@ -444,7 +432,6 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
             return sourceItem;
         }).toList();
         sourceColumn = sourceColumn.copyWith(items: updatedSourceItems);
-        debugPrint('  Đã đánh dấu ${idsToMarkAsUsed.length} item là "đã dùng" ở Cột Nguồn.');
 
         final newItemsForTarget = itemsToProcess.map((itemToClone) => itemToClone.copyWith(
             id: _uuid.v4(),
@@ -453,10 +440,9 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
             setNextItemIdToNull: true,
             isUsed: false,
         )).toList();
-
+        
         final updatedTargetItems = List<Item>.from(targetColumn.items)..addAll(newItemsForTarget);
         targetColumn = targetColumn.copyWith(items: updatedTargetItems);
-        debugPrint('  Đã thêm ${newItemsForTarget.length} item mới vào Cột Đích.');
 
     } else {
       // KÉO TỪ CÁC CỘT KHÁC (logic "SAO CHÉP")
