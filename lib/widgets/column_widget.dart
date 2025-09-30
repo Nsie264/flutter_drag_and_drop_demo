@@ -7,19 +7,17 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:collection/collection.dart';
 
 // Widget helper để render một ô item trong Cột Nguồn
-// Giúp tái sử dụng code và giữ cho code chính sạch sẽ
 Widget _buildSourceItemTile(BuildContext context, Item item, {required DragRole role}) {
   final bool isParentRole = role == DragRole.parent;
   
   return Draggable<Item>(
-    // Gán vai trò vào data được kéo đi
     data: item.copyWith(dragRole: role), 
     feedback: Material(
       color: Colors.transparent,
-      child: Theme( // Thêm Theme để feedback có style đúng
+      child: Theme(
         data: Theme.of(context),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 250 - 32), // Chiều rộng cột nguồn trừ padding
+          constraints: const BoxConstraints(maxWidth: 250 - 32),
           child: Container(
             height: isParentRole ? 45 : 35,
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -28,7 +26,7 @@ Widget _buildSourceItemTile(BuildContext context, Item item, {required DragRole 
                   ? Colors.grey.shade300
                   : (isParentRole ? Colors.amber.shade100 : Colors.blue.shade100),
               borderRadius: BorderRadius.circular(4),
-              boxShadow: const [ // Thêm đổ bóng nhẹ cho feedback
+              boxShadow: const [
                 BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(2, 2)),
               ]
             ),
@@ -100,6 +98,7 @@ class ColumnWidget extends StatelessWidget {
   final List<Item> items;
   final Map<String, GlobalKey> itemKeys;
   final int displayLevelStart;
+  final ScrollController? scrollController;
 
   const ColumnWidget({
     super.key,
@@ -109,6 +108,7 @@ class ColumnWidget extends StatelessWidget {
     required this.items,
     required this.itemKeys,
     required this.displayLevelStart,
+    this.scrollController,
   });
 
   @override
@@ -116,8 +116,15 @@ class ColumnWidget extends StatelessWidget {
     return DragTarget<Item>(
       onWillAcceptWithDetails: (details) {
         final item = details.data;
-        final isAlreadyInTarget =
-            items.any((i) => i.originalId == item.originalId);
+        bool isAlreadyInTarget = false;
+        if(item.columnId == 1 && item.dragRole == DragRole.parent){
+          final sourceItems = context.read<DragDropBloc>().state.sourceColumn.items;
+          final childrenToMove = sourceItems.where((child) => child.parentId == item.id && !child.isUsed);
+          final originalIdsToMove = childrenToMove.map((c) => c.originalId).toSet();
+          isAlreadyInTarget = items.any((i) => originalIdsToMove.contains(i.originalId));
+        } else {
+          isAlreadyInTarget = items.any((i) => i.originalId == item.originalId);
+        }
         return columnId > item.columnId && !isAlreadyInTarget;
       },
       onAcceptWithDetails: (details) {
@@ -132,12 +139,10 @@ class ColumnWidget extends StatelessWidget {
           margin: const EdgeInsets.all(8.0),
           padding: const EdgeInsets.all(8.0),
           decoration: BoxDecoration(
-            color:
-                isTarget ? Colors.lightGreen.shade100 : Colors.grey.shade100,
+            color: isTarget ? Colors.lightGreen.shade100 : Colors.grey.shade100,
             borderRadius: BorderRadius.circular(8.0),
             border: Border.all(
-              color: isTarget ? Colors.green : Colors.transparent,
-              width: 2,
+              color: isTarget ? Colors.green : Colors.transparent, width: 2,
             ),
           ),
           child: Column(
@@ -151,21 +156,17 @@ class ColumnWidget extends StatelessWidget {
                     Text(title, style: Theme.of(context).textTheme.titleLarge),
                     if (columnId > 1)
                       IconButton(
-                        icon: const Icon(Icons.delete_outline,
-                            color: Colors.redAccent),
-                        onPressed: () {
-                          // TODO: Implement remove column logic
-                        },
+                        icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                        onPressed: () {},
                         splashRadius: 20,
                       )
                   ],
                 ),
               ),
-              Expanded(
-                child: columnId == 1
-                    ? _buildSourceColumnContent(context)
-                    : _buildWorkflowColumnContent(context),
-              ),
+              if (columnId == 1)
+                Expanded(child: _buildSourceColumnContent(context))
+              else
+                _buildWorkflowColumnContent(context),
             ],
           ),
         );
@@ -180,15 +181,8 @@ class ColumnWidget extends StatelessWidget {
       if (!a.isUsed && b.isUsed) return -1;
       return a.originalId.compareTo(b.originalId);
     });
-
-    final visibleItems = sortedItems
-        .where((item) =>
-            item.itemLevel >= displayLevelStart &&
-            item.itemLevel <= displayLevelStart + 1)
-        .toList();
-    
+    final visibleItems = sortedItems.where((item) => item.itemLevel >= displayLevelStart && item.itemLevel <= displayLevelStart + 1).toList();
     final visibleItemsById = {for (var item in visibleItems) item.id: item};
-
     final List<Item> rootItemsToRender = [];
     for (final item in visibleItems) {
       if (item.itemLevel == displayLevelStart || (item.parentId == null || !visibleItemsById.containsKey(item.parentId))) {
@@ -197,32 +191,29 @@ class ColumnWidget extends StatelessWidget {
     }
 
     return ListView.builder(
+      controller: scrollController,
       itemCount: rootItemsToRender.length,
       itemBuilder: (context, index) {
         final rootItem = rootItemsToRender[index];
-
         if (rootItem.itemLevel == displayLevelStart) {
-          final childrenInView = visibleItems
-              .where((child) => child.parentId == rootItem.id)
-              .toList();
-
-          final allDirectChildrenInSource = items.where((i) => i.parentId == rootItem.id).toList();
-          final isDisabledByChildren = allDirectChildrenInSource.isNotEmpty && allDirectChildrenInSource.every((d) => d.isUsed);
-          final isParentEffectivelyDisabled = rootItem.isUsed || isDisabledByChildren;
-
+          final childrenInView = visibleItems.where((child) => child.parentId == rootItem.id).toList();
+          final isParentDisabled = rootItem.isUsed;
+          
           if (childrenInView.isEmpty) {
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 2.0),
-              child: _buildSourceItemTile(context, rootItem, role: DragRole.parent),
+              child: isParentDisabled 
+                ? IgnorePointer(child: _buildSourceItemTile(context, rootItem, role: DragRole.parent))
+                : _buildSourceItemTile(context, rootItem, role: DragRole.parent),
             );
           }
           
           return ExpansionTile(
             key: PageStorageKey(rootItem.id),
             tilePadding: EdgeInsets.zero,
-            title: isParentEffectivelyDisabled
-                ? _buildSourceItemTile(context, rootItem, role: DragRole.parent)
-                : _buildSourceItemTile(context, rootItem, role: DragRole.parent),
+            title: isParentDisabled 
+              ? IgnorePointer(child: _buildSourceItemTile(context, rootItem, role: DragRole.parent))
+              : _buildSourceItemTile(context, rootItem, role: DragRole.parent),
             initiallyExpanded: false,
             childrenPadding: const EdgeInsets.only(left: 16),
             children: childrenInView.map((childItem) {
@@ -241,50 +232,35 @@ class ColumnWidget extends StatelessWidget {
 
   Widget _buildWorkflowColumnContent(BuildContext context) {
     if (items.isEmpty) {
-      return const Center(
-          child: Text('Kéo item vào đây', style: TextStyle(color: Colors.grey)));
+      return const Center(child: Text('Kéo item vào đây', style: TextStyle(color: Colors.grey)));
     }
-
     final masterItems = context.read<DragDropBloc>().state.masterItems;
-    
     final placeholders = items.where((i) => i.isGroupPlaceholder).toList();
     final childrenItems = items.where((i) => !i.isGroupPlaceholder && i.potentialParentOriginalId != null).toList();
     final orphanItems = items.where((i) => !i.isGroupPlaceholder && i.potentialParentOriginalId == null).toList();
-
-    final groupedChildren = groupBy<Item, String>(
-        childrenItems, (item) => item.potentialParentOriginalId!);
-
+    final groupedChildren = groupBy<Item, String>(childrenItems, (item) => item.potentialParentOriginalId!);
     List<Widget> widgetsToRender = [];
-    
     widgetsToRender.addAll(orphanItems.map((item) => WorkflowItemWidget(
-      key: ValueKey(item.id),
-      item: item,
-      itemKey: itemKeys[item.id]!,
+      key: ValueKey(item.id), item: item, itemKey: itemKeys[item.id]!,
     )));
-
     widgetsToRender.addAll(placeholders.map((item) {
       final isComplete = context.read<DragDropBloc>().isGroupComplete(item, masterItems);
       return WorkflowItemWidget(
-        key: ValueKey(item.id),
-        item: item,
-        itemKey: itemKeys[item.id]!,
-        isComplete: isComplete,
+        key: ValueKey(item.id), item: item, itemKey: itemKeys[item.id]!, isComplete: isComplete,
       );
     }));
-
     groupedChildren.forEach((parentId, children) {
         final parentInfo = masterItems.firstWhereOrNull((m) => m.originalId == parentId);
         if (parentInfo != null) {
           widgetsToRender.add(GroupContainerWidget(
-            key: ValueKey(parentId),
-            parentInfo: parentInfo,
-            childItems: children,
-            itemKeys: itemKeys,
+            key: ValueKey(parentId), parentInfo: parentInfo, childItems: children, itemKeys: itemKeys,
           ));
         }
     });
 
-    return ListView(
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: widgetsToRender,
     );
   }
