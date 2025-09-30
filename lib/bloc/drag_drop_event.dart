@@ -21,9 +21,6 @@ class ItemDropped extends DragDropEvent {
   List<Object> get props => [item, targetColumnId];
 }
 
-// Giữ nguyên: Thêm cột mới
-class AddNewColumn extends DragDropEvent {}
-
 // Giữ nguyên: Xóa cột
 class RemoveColumn extends DragDropEvent {
   final int columnId;
@@ -108,4 +105,13 @@ class MergeGroupRequested extends DragDropEvent {
 
   @override
   List<Object> get props => [representativeItem, targetItem];
+}
+
+class AddNewColumn extends DragDropEvent {
+  final String title; // <-- THÊM THAM SỐ
+
+  const AddNewColumn({required this.title}); // <-- CẬP NHẬT CONSTRUCTOR
+
+  @override
+  List<Object> get props => [title]; // <-- CẬP NHẬT PROPS
 }

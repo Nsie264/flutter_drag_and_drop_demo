@@ -635,9 +635,9 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
     }
 
     final initialColumns = [
-      ColumnData(id: 1, title: 'Nguồn', items: initialSourceItems),
-      const ColumnData(id: 2, title: 'Cột 2', items: []),
-      const ColumnData(id: 3, title: 'Cột 3', items: []),
+      ColumnData(id: 1, title: 'Chi tiết nguồn', items: initialSourceItems),
+      const ColumnData(id: 2, title: 'Tổ A - Trạm 1', items: []),
+      const ColumnData(id: 3, title: 'Tổ B - Trạm 2', items: []),
     ];
 
     emit(state.copyWith(masterItems: masterItems, columns: initialColumns));
@@ -1087,13 +1087,13 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
         (state.columns.map((c) => c.id).reduce((a, b) => a > b ? a : b)) + 1;
     final newColumn = ColumnData(
       id: newId,
-      title: 'Cột $newId',
+      title: event.title,
       items: const [],
     );
 
     final updatedColumns = List<ColumnData>.from(state.columns)..add(newColumn);
     emit(state.copyWith(columns: updatedColumns));
-  }
+}
 
   void _onUpgradeToPlaceholderRequested(
     UpgradeToPlaceholderRequested event,

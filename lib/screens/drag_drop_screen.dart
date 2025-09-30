@@ -41,6 +41,87 @@ class _DragDropScreenState extends State<DragDropScreen> {
     super.dispose();
   }
 
+  Future<void> _showAddColumnDialog() async {
+    String? selectedTeam = 'A'; // Giá trị mặc định
+    String? selectedStation = '1';
+    final formKey = GlobalKey<FormState>();
+
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Thêm Cột Mới'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Dropdown cho Tổ
+                DropdownButtonFormField<String>(
+                  value: selectedTeam,
+                  decoration: const InputDecoration(labelText: 'Chọn Tổ'),
+                  items: ['A', 'B', 'C'].map((String value) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: Text('Tổ $value'),
+                    );
+                  }).toList(),
+                  onChanged: (String? newValue) {
+                    selectedTeam = newValue;
+                  },
+                ),
+                const SizedBox(height: 16),
+                // Dropdown cho Trạm
+                DropdownButtonFormField<String>(
+                  value: selectedStation,
+                  decoration: const InputDecoration(labelText: 'Chọn Trạm'),
+                  items: ['1', '2', '3'].map((String value) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: Text('Trạm $value'),
+                    );
+                  }).toList(),
+                  onChanged: (String? newValue) {
+                    selectedStation = newValue;
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Hủy'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            ElevatedButton(
+              child: const Text('Thêm'),
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  Navigator.of(
+                    context,
+                  ).pop({'team': selectedTeam!, 'station': selectedStation!});
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+
+    // Xử lý kết quả từ Dialog
+    if (result != null &&
+        result.containsKey('team') &&
+        result.containsKey('station')) {
+      final title = 'Tổ ${result['team']} - Trạm ${result['station']}';
+      // Gửi event đến BLoC với title mới
+      if (mounted) {
+        context.read<DragDropBloc>().add(AddNewColumn(title: title));
+      }
+    }
+  }
+
   Future<void> _pickAndProcessFile() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -220,15 +301,7 @@ class _DragDropScreenState extends State<DragDropScreen> {
                                                       label: const Text(
                                                         'Thêm Cột',
                                                       ),
-                                                      onPressed: () {
-                                                        context
-                                                            .read<
-                                                              DragDropBloc
-                                                            >()
-                                                            .add(
-                                                              AddNewColumn(),
-                                                            );
-                                                      },
+                                                      onPressed: _showAddColumnDialog,
                                                       style: ElevatedButton.styleFrom(
                                                         padding:
                                                             const EdgeInsets.symmetric(

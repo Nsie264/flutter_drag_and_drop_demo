@@ -164,7 +164,7 @@ class ColumnWidget extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(title, style: Theme.of(context).textTheme.titleLarge),
+                    Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                     if (columnId > 1)
                       IconButton(
                         icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
