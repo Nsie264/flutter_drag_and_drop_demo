@@ -1,8 +1,6 @@
 import 'package:drag_and_drop/models/item.dart';
 import 'package:drag_and_drop/widgets/workflow_item_widget.dart';
 import 'package:flutter/material.dart';
-import 'package:collection/collection.dart'; // Cần import collection
-
 class GroupContainerWidget extends StatelessWidget {
   final Item parentInfo;
   final List<Item> childItems;

@@ -306,13 +306,13 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
         );
         targetSiblingSourceId = sourceOfTarget.id;
         debugPrint(
-          '  - Tìm thấy nguồn của item đích: "\x1B[36m${sourceOfTarget.name}\x1B[0m" (ID: ${targetSiblingSourceId!.substring(0, 8)})',
+          '  - Tìm thấy nguồn của item đích: "\x1B[36m${sourceOfTarget.name}\x1B[0m" (ID: ${targetSiblingSourceId.substring(0, 8)})',
         );
       } catch (e) {
         // Nếu không có nguồn (ví dụ: nó được kéo từ Cột Nguồn), ID của nó chính là nguồn
         targetSiblingSourceId = targetItem.id;
         debugPrint(
-          '  - Không tìm thấy nguồn, item đích tự là nguồn. (ID: ${targetSiblingSourceId!.substring(0, 8)})',
+          '  - Không tìm thấy nguồn, item đích tự là nguồn. (ID: ${targetSiblingSourceId.substring(0, 8)})',
         );
       }
 
