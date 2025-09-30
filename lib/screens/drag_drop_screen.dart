@@ -16,8 +16,8 @@ class DragDropScreen extends StatefulWidget {
 class _DragDropScreenState extends State<DragDropScreen> {
   final Map<String, GlobalKey> _itemKeys = {};
   // Key cho toàn bộ khu vực `Expanded` cha
-  final GlobalKey _paintAreaKey = GlobalKey(); 
-  
+  final GlobalKey _paintAreaKey = GlobalKey();
+
   final GlobalKey _customPaintAreaKey = GlobalKey();
 
   static const double sourceColumnWidth = 250.0;
@@ -40,23 +40,29 @@ class _DragDropScreenState extends State<DragDropScreen> {
     _workingAreaVerticalScrollController.dispose();
     super.dispose();
   }
-  
+
   Future<void> _pickAndProcessFile() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.custom, allowedExtensions: ['xlsx'], withData: true,
+        type: FileType.custom,
+        allowedExtensions: ['xlsx'],
+        withData: true,
       );
       if (result != null && result.files.single.bytes != null) {
         Uint8List fileBytes = result.files.single.bytes!;
         final parser = ExcelDataParser();
         final newMasterItems = parser.parseItemsFromExcel(fileBytes);
         if (mounted) {
-          context.read<DragDropBloc>().add(LoadItemsFromData(newMasterItems: newMasterItems));
+          context.read<DragDropBloc>().add(
+            LoadItemsFromData(newMasterItems: newMasterItems),
+          );
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi khi xử lý file: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi khi xử lý file: $e')));
       }
     }
   }
@@ -64,24 +70,16 @@ class _DragDropScreenState extends State<DragDropScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Hierarchical Drag and Drop'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.upload_file),
-            onPressed: _pickAndProcessFile,
-            tooltip: 'Tải lên file Excel',
-          ),
-          const SizedBox(width: 16),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Hierarchical Drag and Drop')),
       body: BlocBuilder<DragDropBloc, DragDropState>(
         builder: (context, state) {
           if (state.columns.isEmpty) {
             return const Center(child: CircularProgressIndicator());
           }
           final allItems = state.columns.expand((col) => col.items).toList();
-          _itemKeys.removeWhere((key, value) => !allItems.any((item) => item.id == key));
+          _itemKeys.removeWhere(
+            (key, value) => !allItems.any((item) => item.id == key),
+          );
           for (var item in allItems) {
             _itemKeys.putIfAbsent(item.id, () => GlobalKey());
           }
@@ -91,14 +89,26 @@ class _DragDropScreenState extends State<DragDropScreen> {
           return Column(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 8.0,
+                  horizontal: 16.0,
+                ),
                 child: Row(
                   children: [
-                    const Text('Bộ lọc Cột Nguồn:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text(
+                      'Bộ lọc Cột Nguồn:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                     const SizedBox(width: 16),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       child: DropdownButton<int>(
                         value: state.displayLevelStart,
                         underline: const SizedBox.shrink(),
@@ -109,10 +119,22 @@ class _DragDropScreenState extends State<DragDropScreen> {
                         ],
                         onChanged: (newValue) {
                           if (newValue != null) {
-                            context.read<DragDropBloc>().add(LevelFilterChanged(newStartLevel: newValue));
+                            context.read<DragDropBloc>().add(
+                              LevelFilterChanged(newStartLevel: newValue),
+                            );
                           }
                         },
                       ),
+                    ),
+                    Spacer(),
+                    Text(
+                      "Tải lên file Excel",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.upload_file),
+                      onPressed: _pickAndProcessFile,
+                      tooltip: 'Tải lên file Excel',
                     ),
                   ],
                 ),
@@ -144,27 +166,36 @@ class _DragDropScreenState extends State<DragDropScreen> {
                         child: LayoutBuilder(
                           builder: (context, constraints) {
                             return ClipRect(
-                              key: _customPaintAreaKey, 
+                              key: _customPaintAreaKey,
                               child: Stack(
                                 children: [
                                   Scrollbar(
-                                    controller: _workingAreaVerticalScrollController,
+                                    controller:
+                                        _workingAreaVerticalScrollController,
                                     thumbVisibility: true,
                                     child: SingleChildScrollView(
-                                      controller: _workingAreaVerticalScrollController,
+                                      controller:
+                                          _workingAreaVerticalScrollController,
                                       child: ConstrainedBox(
-                                        constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                                        constraints: BoxConstraints(
+                                          minHeight: constraints.maxHeight,
+                                        ),
                                         child: Scrollbar(
-                                          controller: _workingAreaHorizontalScrollController,
+                                          controller:
+                                              _workingAreaHorizontalScrollController,
                                           thumbVisibility: true,
                                           child: SingleChildScrollView(
-                                            controller: _workingAreaHorizontalScrollController,
+                                            controller:
+                                                _workingAreaHorizontalScrollController,
                                             scrollDirection: Axis.horizontal,
                                             child: IntrinsicHeight(
                                               child: Row(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
                                                 children: [
-                                                  ...scrollableColumns.map((column) {
+                                                  ...scrollableColumns.map((
+                                                    column,
+                                                  ) {
                                                     return ColumnWidget(
                                                       key: ValueKey(column.id),
                                                       width: otherColumnWidth,
@@ -172,20 +203,38 @@ class _DragDropScreenState extends State<DragDropScreen> {
                                                       title: column.title,
                                                       items: column.items,
                                                       itemKeys: _itemKeys,
-                                                      displayLevelStart: state.displayLevelStart,
+                                                      displayLevelStart: state
+                                                          .displayLevelStart,
                                                     );
                                                   }),
                                                   Container(
                                                     width: otherColumnWidth,
-                                                    margin: const EdgeInsets.symmetric(vertical: 8.0),
+                                                    margin:
+                                                        const EdgeInsets.symmetric(
+                                                          vertical: 8.0,
+                                                        ),
                                                     child: ElevatedButton.icon(
-                                                      icon: const Icon(Icons.add_box_outlined),
-                                                      label: const Text('Thêm Cột'),
+                                                      icon: const Icon(
+                                                        Icons.add_box_outlined,
+                                                      ),
+                                                      label: const Text(
+                                                        'Thêm Cột',
+                                                      ),
                                                       onPressed: () {
-                                                        context.read<DragDropBloc>().add(AddNewColumn());
+                                                        context
+                                                            .read<
+                                                              DragDropBloc
+                                                            >()
+                                                            .add(
+                                                              AddNewColumn(),
+                                                            );
                                                       },
                                                       style: ElevatedButton.styleFrom(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                                                        padding:
+                                                            const EdgeInsets.symmetric(
+                                                              horizontal: 24,
+                                                              vertical: 16,
+                                                            ),
                                                       ),
                                                     ),
                                                   ),
@@ -204,7 +253,6 @@ class _DragDropScreenState extends State<DragDropScreen> {
                                           allItems: allItems,
                                           itemKeys: _itemKeys,
                                           stackKey: _customPaintAreaKey,
-                                          
                                         ),
                                       ),
                                     ),
