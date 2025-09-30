@@ -62,9 +62,7 @@ class WorkflowItemWidget extends StatelessWidget {
             canDropOnParentPlaceholder ||
             canUpgradeToPlaceholder;
       },
-      // =================================================================
-      // === SỬ DỤNG LOGIC onAcceptWithDetails CHÍNH XÁC CỦA BẠN ===
-      // =================================================================
+
       onAcceptWithDetails: (details) {
         final draggedItem = details.data;
         final targetItem = item;
@@ -106,7 +104,7 @@ class WorkflowItemWidget extends StatelessWidget {
         return Stack(
           clipBehavior: Clip.none,
           children: [
-            SizedBox( // Sử dụng SizedBox để đảm bảo kích thước ổn định
+            SizedBox( 
               width: columnWidth - 16,
               child: _buildBox(
                 context,
@@ -166,16 +164,13 @@ class WorkflowItemWidget extends StatelessWidget {
       return mainContent;
     }
   }
-
-  // Các hàm _buildBox, _buildRegularItemBox, _buildPlaceholderBox
-  // không thay đổi so với phiên bản trước, chúng đã đúng.
   
   Widget _buildBox(
     BuildContext context, {
     Key? key,
     bool isDragging = false,
     bool isTargetForMerge = false,
-    bool isLinked = false, // Tham số mới
+    bool isLinked = false, 
   }) {
     if (item.isGroupPlaceholder) {
       return _buildPlaceholderBox(context, key, isDragging, isTargetForMerge, isLinked);

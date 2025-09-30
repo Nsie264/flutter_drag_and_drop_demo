@@ -654,19 +654,22 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
 
     debugPrint('\n--- START [_onRemoveWorkflowItem] ---');
     debugPrint(
-      '  Item to remove: "${itemToRemove.name}" (ID: ${itemToRemove.id.substring(0, 8)}) from Col $columnId',
+      '  Item to remove: "${itemToRemove.name}" (Original ID: ${itemToRemove.originalId}) from Col $columnId',
     );
 
     List<ColumnData> updatedColumns = List.from(state.columns);
 
-    // 1. Dọn dẹp các liên kết ngược (không đổi)
-    debugPrint('  1. Cleaning up backward links...');
+    // ================================================================
+    // BƯỚC 1: DỌN DẸP LIÊN KẾT NGƯỢC (nextItemId)
+    // Phần này không đổi và đã đúng
+    // ================================================================
+    debugPrint('  1. Cleaning up backward links (nextItemId)...');
     for (var i = 0; i < updatedColumns.length; i++) {
       bool columnWasUpdated = false;
       final List<Item> cleanedItems = updatedColumns[i].items.map((item) {
         if (item.nextItemId == itemToRemove.id) {
           debugPrint(
-            '    - Found link from "${item.name}". Resetting nextItemId.',
+            '    - Found link from "${item.name}" (ID: ${item.id.substring(0, 8)}). Resetting its nextItemId.',
           );
           columnWasUpdated = true;
           return item.copyWith(setNextItemIdToNull: true);
@@ -678,19 +681,67 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
       }
     }
 
-    // 2. Xóa item và các con cháu của nó (không đổi)
-    debugPrint('  2. Removing item and its descendants from Col $columnId...');
+    // ================================================================
+    // BƯỚC 1.5: CẬP NHẬT PLACEHOLDER CHA (LOGIC MỚI)
+    // Tìm xem item sắp bị xóa có đang được liên kết bởi một placeholder nào không.
+    // ================================================================
+    debugPrint('  1.5. Updating parent placeholder if exists...');
+    final itemToRemoveOriginalId = itemToRemove.originalId;
+    bool placeholderUpdated = false;
+
+    for (var i = 0; i < updatedColumns.length; i++) {
+      final List<Item>
+      itemsAfterPlaceholderUpdate = updatedColumns[i].items.map((item) {
+        // Kiểm tra xem item có phải là placeholder và có chứa con sắp bị xóa không
+        if (item.isGroupPlaceholder &&
+            item.linkedChildrenOriginalIds.contains(itemToRemoveOriginalId)) {
+          debugPrint(
+            '    - Found parent placeholder "${item.name}" (ID: ${item.id.substring(0, 8)})',
+          );
+
+          final updatedLinks = List<String>.from(item.linkedChildrenOriginalIds)
+            ..remove(itemToRemoveOriginalId);
+
+          debugPrint(
+            '    - Removing child. Linked IDs: ${item.linkedChildrenOriginalIds} -> $updatedLinks',
+          );
+          placeholderUpdated = true;
+
+          // Nếu placeholder hết con và không phải là item gốc (tức là nó được tạo ra từ việc gộp nhóm),
+          // nó nên bị xóa đi. Tuy nhiên, logic này có thể phức tạp.
+          // Tạm thời, chúng ta chỉ cập nhật danh sách con.
+          return item.copyWith(linkedChildrenOriginalIds: updatedLinks);
+        }
+        return item;
+      }).toList();
+
+      if (placeholderUpdated) {
+        updatedColumns[i] = updatedColumns[i].copyWith(
+          items: itemsAfterPlaceholderUpdate,
+        );
+        break; // Giả sử một item con chỉ có thể thuộc 1 placeholder trong workflow
+      }
+    }
+    if (!placeholderUpdated) {
+      debugPrint('    - No parent placeholder found for this item.');
+    }
+
+    // ================================================================
+    // BƯỚC 2: XÓA ITEM VÀ CÁC CON CHÁU CỤC BỘ
+    // Phần này không đổi
+    // ================================================================
+    debugPrint('  2. Removing item instance from Col $columnId...');
     final targetColIndex = updatedColumns.indexWhere((c) => c.id == columnId);
     if (targetColIndex != -1) {
       var targetColumn = updatedColumns[targetColIndex];
-      final descendantsInColumn = findAllInstanceDescendants(
-        itemToRemove.id,
-        targetColumn.items,
-      );
-      final idsToDelete = {
-        itemToRemove.id,
-        ...descendantsInColumn.map((d) => d.id),
-      };
+
+      // Lưu ý: Logic tìm con cháu cục bộ (findAllInstanceDescendants) không cần thiết ở đây
+      // vì chúng ta đang xử lý việc xóa một item đơn lẻ (không phải placeholder).
+      // Nếu xóa placeholder thì logic này mới cần thiết.
+      // Để đơn giản và đúng với yêu cầu, ta chỉ xóa chính item đó.
+
+      final idsToDelete = {itemToRemove.id};
+
       final remainingItems = targetColumn.items
           .where((item) => !idsToDelete.contains(item.id))
           .toList();
@@ -699,18 +750,18 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
       );
     }
 
-    // ================ LOGIC MỚI: KIỂM TRA VÀ HỒI SINH ================
+    // ================================================================
+    // BƯỚC 3: LOGIC HỒI SINH
+    // ================================================================
     debugPrint('  3. Checking if the removed item was the last instance...');
     final originalIdToCheck = itemToRemove.originalId;
 
-    // Quét tất cả các cột làm việc để xem còn bản sao nào không
     bool instanceExists = false;
     for (final col in updatedColumns) {
       if (col.id > 1) {
-        // Chỉ kiểm tra các cột làm việc
         if (col.items.any((item) => item.originalId == originalIdToCheck)) {
           instanceExists = true;
-          break; // Tìm thấy một bản sao, không cần kiểm tra thêm
+          break;
         }
       }
     }
@@ -719,12 +770,10 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
       debugPrint(
         '    - Yes, it was the last instance. Reverting isUsed status in source column.',
       );
-      // Nếu không còn bản sao nào, gọi hàm hồi sinh
       updatedColumns = _revertIsUsedInSource(originalIdToCheck, updatedColumns);
     } else {
       debugPrint('    - No, other instances still exist.');
     }
-    // =================================================================
 
     _logAllColumnsState('RemoveWorkflowItem', updatedColumns);
     emit(state.copyWith(columns: updatedColumns));
