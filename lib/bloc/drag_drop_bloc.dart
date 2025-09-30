@@ -407,15 +407,12 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
     final fromColumnId = item.columnId;
     final toColumnId = event.targetColumnId;
 
-    debugPrint('\n\n\x1B[35m--- START [_onItemDropped] (Final Fix) ---\x1B[0m');
-    debugPrint(
-      '  Item Kéo: "${item.name}" (Vai trò khi kéo: ${item.dragRole})',
-    );
-
-    if (fromColumnId >= toColumnId ||
-        fromColumnId == 0 ||
-        (item.columnId == 1 && item.isUsed)) {
-      return;
+    debugPrint('\n\n\x1B[35m--- START [_onItemDropped] (Final Parent Logic) ---\x1B[0m');
+    debugPrint('  Item Kéo: "${item.name}" (Vai trò khi kéo: ${item.dragRole})');
+    
+    // Logic chặn kéo item đã dùng vẫn đúng
+    if (fromColumnId >= toColumnId || fromColumnId == 0 || (item.columnId == 1 && item.isUsed)) {
+        return;
     }
 
     List<ColumnData> updatedColumns = List.from(state.columns);
@@ -425,77 +422,61 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
 
     var sourceColumn = updatedColumns[fromIndex];
     var targetColumn = updatedColumns[toIndex];
+    
+    if (fromColumnId == 1) { // KÉO TỪ CỘT NGUỒN
+        
+        List<Item> itemsToProcess;
+        Set<String> idsToMarkAsUsed;
 
-    if (fromColumnId == 1) {
-      // KÉO TỪ CỘT NGUỒN
+        if (item.dragRole == DragRole.parent) {
+            final directChildren = sourceColumn.items
+                .where((child) => child.parentId == item.id && !child.isUsed)
+                .toList();
 
-      List<Item> itemsToProcess;
-      Set<String> idsToMarkAsUsed;
-
-      if (item.dragRole == DragRole.parent) {
-        debugPrint(
-          '  \x1B[36m-> Kịch bản 1: Kéo với vai trò PARENT, chỉ chuyển CON TRỰC TIẾP.\x1B[0m',
-        );
-        final directChildren = sourceColumn.items
-            .where((child) => child.parentId == item.id && !child.isUsed)
-            .toList();
-
-        itemsToProcess = directChildren;
-        // === SỬA LỖI QUAN TRỌNG: CHỈ ĐÁNH DẤU CÁC CON ĐƯỢC CHUYỂN ĐI ===
-        idsToMarkAsUsed = directChildren.map((d) => d.id).toSet();
-        // Đoạn code kiểm tra "allDirectChildren" và thêm item.id đã được XÓA BỎ.
-        // =============================================================
-      } else {
-        // item.dragRole == DragRole.child
-        debugPrint(
-          '  \x1B[36m-> Kịch bản 2: Kéo với vai trò CHILD, chỉ chuyển CHÍNH NÓ.\x1B[0m',
-        );
-        itemsToProcess = [item];
-        idsToMarkAsUsed = {item.id};
-      }
-
-      if (itemsToProcess.isEmpty) {
-        debugPrint('  -> Không có item nào để xử lý. Kết thúc.');
-        return;
-      }
-
-      debugPrint(
-        '  Items sẽ được xử lý (${itemsToProcess.length} mục): ${itemsToProcess.map((i) => i.name).join(', ')}',
-      );
-
-      final originalIdsToProcess = itemsToProcess
-          .map((i) => i.originalId)
-          .toSet();
-      if (targetColumn.items.any(
-        (i) => originalIdsToProcess.contains(i.originalId),
-      )) {
-        debugPrint('  -> Bị chặn do trùng lặp ở cột đích. Kết thúc.');
-        return;
-      }
-
-      final updatedSourceItems = sourceColumn.items.map((sourceItem) {
-        if (idsToMarkAsUsed.contains(sourceItem.id)) {
-          return sourceItem.copyWith(isUsed: true);
+            // KỊCH BẢN 1A: Kéo PARENT và nó VẪN CÓ CON để phân phát
+            if (directChildren.isNotEmpty) {
+                debugPrint('  \x1B[36m-> Kịch bản 1A: Kéo PARENT có con -> Phân phát con.\x1B[0m');
+                itemsToProcess = directChildren;
+                idsToMarkAsUsed = directChildren.map((d) => d.id).toSet();
+            } 
+            // KỊCH BẢN 1B: Kéo PARENT nhưng nó ĐÃ HẾT CON
+            else {
+                debugPrint('  \x1B[36m-> Kịch bản 1B: Kéo PARENT rỗng -> Di chuyển chính nó.\x1B[0m');
+                itemsToProcess = [item];
+                idsToMarkAsUsed = {item.id};
+            }
+        } 
+        else { // item.dragRole == DragRole.child
+            debugPrint('  \x1B[36m-> Kịch bản 2: Kéo với vai trò CHILD, chỉ chuyển CHÍNH NÓ.\x1B[0m');
+            itemsToProcess = [item];
+            idsToMarkAsUsed = {item.id};
         }
-        return sourceItem;
-      }).toList();
-      sourceColumn = sourceColumn.copyWith(items: updatedSourceItems);
 
-      final newItemsForTarget = itemsToProcess
-          .map(
-            (itemToClone) => itemToClone.copyWith(
-              id: _uuid.v4(),
-              columnId: toColumnId,
-              parentId: null,
-              setNextItemIdToNull: true,
-              isUsed: false,
-            ),
-          )
-          .toList();
+        if (itemsToProcess.isEmpty) { return; }
 
-      final updatedTargetItems = List<Item>.from(targetColumn.items)
-        ..addAll(newItemsForTarget);
-      targetColumn = targetColumn.copyWith(items: updatedTargetItems);
+        // ... (phần còn lại của hàm không đổi và đã chính xác)
+        final originalIdsToProcess = itemsToProcess.map((i) => i.originalId).toSet();
+        if (targetColumn.items.any((i) => originalIdsToProcess.contains(i.originalId))) { return; }
+
+        final updatedSourceItems = sourceColumn.items.map((sourceItem) {
+            if (idsToMarkAsUsed.contains(sourceItem.id)) {
+                return sourceItem.copyWith(isUsed: true);
+            }
+            return sourceItem;
+        }).toList();
+        sourceColumn = sourceColumn.copyWith(items: updatedSourceItems);
+
+        final newItemsForTarget = itemsToProcess.map((itemToClone) => itemToClone.copyWith(
+            id: _uuid.v4(),
+            columnId: toColumnId,
+            parentId: null,
+            setNextItemIdToNull: true,
+            isUsed: false,
+        )).toList();
+        
+        final updatedTargetItems = List<Item>.from(targetColumn.items)..addAll(newItemsForTarget);
+        targetColumn = targetColumn.copyWith(items: updatedTargetItems);
+
     } else {
       // KÉO TỪ CÁC CỘT KHÁC (logic "SAO CHÉP")
       // Logic chống trùng lặp
