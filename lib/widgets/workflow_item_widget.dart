@@ -20,15 +20,17 @@ class WorkflowItemWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // === THAY ĐỔI 1: Xác định xem item có thể kéo được không ===
+    // Xác định xem item có thể kéo được không
     final bool isDraggable = item.nextItemId == null;
 
     // Widget nội dung chính, được bao bọc bởi DragTarget
     Widget mainContent = DragTarget<Item>(
-
+      // =================================================================
+      // === SỬ DỤNG LOGIC onWillAcceptWithDetails CHÍNH XÁC CỦA BẠN ===
+      // =================================================================
       onWillAcceptWithDetails: (details) {
         final draggedItem = details.data;
-        final targetItem = item; // Để code dễ đọc hơn
+        final targetItem = item;
 
         // Chặn các hành động không hợp lệ ngay từ đầu
         if (draggedItem.columnId <= 1 ||
@@ -36,52 +38,67 @@ class WorkflowItemWidget extends StatelessWidget {
           return false;
         }
 
-        // Kịch bản 1: Thả vào "anh em" để tạo nhóm
+        // Xác định parent originalId của item/group đang được kéo
+        final draggedParentOriginalId = draggedItem.potentialParentOriginalId;
+        if (draggedParentOriginalId == null) return false;
+
+        // Kịch bản 1: Thả vào "anh em"
         final bool canAcceptSibling =
             !targetItem.isGroupPlaceholder &&
             targetItem.originalId != draggedItem.originalId &&
-            targetItem.potentialParentOriginalId ==
-                draggedItem.potentialParentOriginalId;
+            targetItem.potentialParentOriginalId == draggedParentOriginalId;
 
-        // Kịch bản 2: Thả con vào CHA ĐẠI DIỆN (placeholder)
+        // Kịch bản 2: Thả vào CHA ĐẠI DIỆN (placeholder)
         final bool canDropOnParentPlaceholder =
             targetItem.isGroupPlaceholder &&
-            targetItem.originalId == draggedItem.potentialParentOriginalId;
+            targetItem.originalId == draggedParentOriginalId;
 
-        // Kịch bản 3: Thả con vào CHA (dạng thường) để nâng cấp
+        // Kịch bản 3: Thả vào CHA (dạng thường) để nâng cấp
         final bool canUpgradeToPlaceholder =
             !targetItem.isGroupPlaceholder &&
-            targetItem.originalId == draggedItem.potentialParentOriginalId;
+            targetItem.originalId == draggedParentOriginalId;
 
         return canAcceptSibling ||
             canDropOnParentPlaceholder ||
             canUpgradeToPlaceholder;
       },
+      // =================================================================
+      // === SỬ DỤNG LOGIC onAcceptWithDetails CHÍNH XÁC CỦA BẠN ===
+      // =================================================================
       onAcceptWithDetails: (details) {
         final draggedItem = details.data;
         final targetItem = item;
 
-        // Phân luồng để gửi đúng event dựa trên kịch bản
-        final bool isUpgradeRequest =
-            !targetItem.isGroupPlaceholder &&
-            targetItem.originalId == draggedItem.potentialParentOriginalId;
-
-        if (isUpgradeRequest) {
-
+        // PHÂN LUỒNG LOGIC TẠI ĐÂY
+        if (draggedItem.dragMode == DragMode.group) {
+          // Gửi event gộp nhóm
           context.read<DragDropBloc>().add(
-            UpgradeToPlaceholderRequested(
-              childItem: draggedItem,
-              parentTargetItem: targetItem,
-            ),
-          );
-        } else {
-          // Gửi event gộp nhóm thông thường (tạo nhóm hoặc thêm vào nhóm đã có)
-          context.read<DragDropBloc>().add(
-            MergeItemsRequested(
-              draggedItem: draggedItem,
+            MergeGroupRequested(
+              representativeItem: draggedItem,
               targetItem: targetItem,
             ),
           );
+        } else {
+          // Logic cũ cho item đơn
+          final bool isUpgradeRequest =
+              !targetItem.isGroupPlaceholder &&
+              targetItem.originalId == draggedItem.potentialParentOriginalId;
+
+          if (isUpgradeRequest) {
+            context.read<DragDropBloc>().add(
+              UpgradeToPlaceholderRequested(
+                childItem: draggedItem,
+                parentTargetItem: targetItem,
+              ),
+            );
+          } else {
+            context.read<DragDropBloc>().add(
+              MergeItemsRequested(
+                draggedItem: draggedItem,
+                targetItem: targetItem,
+              ),
+            );
+          }
         }
       },
       builder: (context, candidateData, rejectedData) {
@@ -102,7 +119,6 @@ class WorkflowItemWidget extends StatelessWidget {
               top: item.isGroupPlaceholder ? -6 : -8,
               right: item.isGroupPlaceholder ? -10 : -12,
               child: IconButton(
-
                  icon: Icon(
                   Icons.close_rounded,
                   size: item.isGroupPlaceholder ? 20 : 18,
@@ -122,7 +138,7 @@ class WorkflowItemWidget extends StatelessWidget {
       },
     );
 
-    // === THAY ĐỔI 3: Chỉ bọc bằng Draggable nếu isDraggable là true ===
+    // Chỉ bọc bằng Draggable nếu isDraggable là true 
     if (isDraggable) {
       return Draggable<Item>(
         data: item,
@@ -146,18 +162,20 @@ class WorkflowItemWidget extends StatelessWidget {
         child: mainContent, // Nội dung hiển thị bình thường
       );
     } else {
-      
+      // Nếu không thể kéo, chỉ trả về nội dung chính (vẫn có DragTarget)
       return mainContent;
     }
   }
 
-  // === THAY ĐỔI 4: Cập nhật hàm _buildBox để nhận tham số isLinked ===
+  // Các hàm _buildBox, _buildRegularItemBox, _buildPlaceholderBox
+  // không thay đổi so với phiên bản trước, chúng đã đúng.
+  
   Widget _buildBox(
     BuildContext context, {
     Key? key,
     bool isDragging = false,
     bool isTargetForMerge = false,
-    bool isLinked = false, 
+    bool isLinked = false, // Tham số mới
   }) {
     if (item.isGroupPlaceholder) {
       return _buildPlaceholderBox(context, key, isDragging, isTargetForMerge, isLinked);
@@ -179,7 +197,7 @@ class WorkflowItemWidget extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12.0),
       decoration: BoxDecoration(
         color: isLinked 
-            ? Colors.blue.shade50 // Màu khi đã khóa/liên kết
+            ? Colors.grey.shade300 
             : (isTargetForMerge ? Colors.lightBlue.shade50 : Colors.blue.shade100),
         borderRadius: BorderRadius.circular(4.0),
         border: Border.all(
@@ -205,15 +223,15 @@ class WorkflowItemWidget extends StatelessWidget {
               child: Text(
                 item.name,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle( // Thay đổi style text để thể hiện trạng thái
+                style: TextStyle( 
                   color: isLinked ? Colors.black54 : Colors.black,
-                  // decoration: isLinked ? TextDecoration.lineThrough : TextDecoration.none,
+                  decoration: isLinked ? TextDecoration.lineThrough : TextDecoration.none,
                 ),
               ),
             ),
           ),
-          if (isLinked) // Thêm icon khóa
-            Icon(Icons.link, size: 16, color: Colors.black54),
+          if (isLinked) 
+            const Icon(Icons.link, size: 16, color: Colors.black54),
           if (!isLinked)
             Text(
               'Cấp ${item.itemLevel}',
@@ -241,7 +259,7 @@ class WorkflowItemWidget extends StatelessWidget {
       padding: const EdgeInsets.all(12.0),
       decoration: BoxDecoration(
         color: isLinked
-            ? Colors.grey.shade200 // Màu khi đã khóa/liên kết
+            ? Colors.grey.shade200 
             : (isTargetForMerge ? Colors.green.shade50 : Colors.white),
         borderRadius: BorderRadius.circular(8.0),
         border: Border.all(
@@ -283,7 +301,7 @@ class WorkflowItemWidget extends StatelessWidget {
                 ),
               ),
               if(isLinked)
-                Icon(Icons.link, size: 18, color: Colors.black54),
+                const Icon(Icons.link, size: 18, color: Colors.black54),
             ],
           ),
           const SizedBox(height: 8),
