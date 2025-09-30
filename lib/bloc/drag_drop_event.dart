@@ -21,27 +21,6 @@ class ItemDropped extends DragDropEvent {
   List<Object> get props => [item, targetColumnId];
 }
 
-// Mới: Xử lý việc tạo liên kết khi thả item A lên item B
-class LinkItemsRequested extends DragDropEvent {
-  final String fromItemId;
-  final String toItemId;
-
-  const LinkItemsRequested({required this.fromItemId, required this.toItemId});
-
-  @override
-  List<Object> get props => [fromItemId, toItemId];
-}
-
-// Thay đổi: Xử lý việc xóa một item (và các con của nó)
-class RemoveItem extends DragDropEvent {
-  final Item itemToRemove;
-
-  const RemoveItem({required this.itemToRemove});
-
-  @override
-  List<Object> get props => [itemToRemove];
-}
-
 // Giữ nguyên: Thêm cột mới
 class AddNewColumn extends DragDropEvent {}
 
@@ -65,21 +44,14 @@ class LevelFilterChanged extends DragDropEvent {
   List<Object> get props => [newStartLevel];
 }
 
-class GroupItemsRequested extends DragDropEvent {
-  final Item draggedItem; // Item con đang được kéo
-  final Item targetItem;  // Item con mà nó được thả vào
-
-  const GroupItemsRequested({required this.draggedItem, required this.targetItem});
-
-  @override
-  List<Object> get props => [draggedItem, targetItem];
-}
-
 class MergeItemsRequested extends DragDropEvent {
   final Item draggedItem; // Item đang được kéo
-  final Item targetItem;  // Item (con hoặc cha đại diện) được thả vào
+  final Item targetItem; // Item (con hoặc cha đại diện) được thả vào
 
-  const MergeItemsRequested({required this.draggedItem, required this.targetItem});
+  const MergeItemsRequested({
+    required this.draggedItem,
+    required this.targetItem,
+  });
 
   @override
   List<Object> get props => [draggedItem, targetItem];
@@ -101,4 +73,17 @@ class LoadItemsFromData extends DragDropEvent {
 
   @override
   List<Object> get props => [newMasterItems];
+}
+
+class UpgradeToPlaceholderRequested extends DragDropEvent {
+  final Item childItem; // Item con đang được kéo
+  final Item parentTargetItem; // Item cha (dạng thường) được thả vào
+
+  const UpgradeToPlaceholderRequested({
+    required this.childItem,
+    required this.parentTargetItem,
+  });
+
+  @override
+  List<Object> get props => [childItem, parentTargetItem];
 }

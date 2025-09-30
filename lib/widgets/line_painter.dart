@@ -1,5 +1,4 @@
 import 'dart:math';
-import 'package:arrow_path/arrow_path.dart';
 import 'package:drag_and_drop/models/item.dart';
 import 'package:flutter/material.dart';
 import 'package:path_drawing/path_drawing.dart';
@@ -28,11 +27,9 @@ class LineAndArrowPainter extends CustomPainter {
 
     for (final fromItem in allItems) {
       if (fromItem.nextItemId != null) {
-        final Item? toItem = allItems.firstWhere(
+        final Item toItem = allItems.firstWhere(
           (i) => i.id == fromItem.nextItemId,
         );
-
-        if (toItem == null) continue;
 
         if (fromItem.columnId <= 1 || toItem.columnId <= 1) {
           continue;

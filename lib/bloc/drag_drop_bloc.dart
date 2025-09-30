@@ -77,11 +77,7 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
     on<RemoveWorkflowItem>(_onRemoveWorkflowItem);
     on<LevelFilterChanged>(_onLevelFilterChanged);
     on<LoadItemsFromData>(_onLoadItemsFromData);
-
-    // Các handler cũ không còn dùng
-    on<LinkItemsRequested>((_, __) {});
-    on<GroupItemsRequested>((_, __) {});
-    on<RemoveItem>((_, __) {});
+    on<UpgradeToPlaceholderRequested>(_onUpgradeToPlaceholderRequested);
 
     on<AddNewColumn>(_onAddNewColumn);
     on<RemoveColumn>(_onRemoveColumn);
@@ -715,6 +711,61 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
     final updatedColumns = List<ColumnData>.from(state.columns)..add(newColumn);
     emit(state.copyWith(columns: updatedColumns));
   }
+
+  void _onUpgradeToPlaceholderRequested(UpgradeToPlaceholderRequested event, Emitter<DragDropState> emit) {
+    final childItem = event.childItem;
+    final parentTargetItem = event.parentTargetItem;
+    final targetColumnId = parentTargetItem.columnId;
+
+    debugPrint('\n\n\x1B[35m--- START [_onUpgradeToPlaceholderRequested] ---\x1B[0m');
+    debugPrint('  Child: "${childItem.name}" from Col ${childItem.columnId}');
+    debugPrint('  Parent Target: "${parentTargetItem.name}" in Col $targetColumnId');
+
+    List<ColumnData> updatedColumns = List.from(state.columns);
+    final targetColIndex = updatedColumns.indexWhere((c) => c.id == targetColumnId);
+    if (targetColIndex == -1) return;
+
+    // 1. "Nâng cấp" item cha trong cột đích
+    var targetColumn = updatedColumns[targetColIndex];
+    final upgradedParent = parentTargetItem.copyWith(
+      isGroupPlaceholder: true,
+      // Thêm con mới vào danh sách liên kết
+      linkedChildrenOriginalIds: [
+        ...parentTargetItem.linkedChildrenOriginalIds, // Giữ lại các con cũ nếu có
+        childItem.originalId,
+      ],
+    );
+
+    // Thay thế item cha cũ bằng phiên bản đã nâng cấp
+    final updatedTargetItems = targetColumn.items.map((item) {
+        if (item.id == parentTargetItem.id) {
+            return upgradedParent;
+        }
+        return item;
+    }).toList();
+    updatedColumns[targetColIndex] = targetColumn.copyWith(items: updatedTargetItems);
+    debugPrint('  1. Upgraded "${parentTargetItem.name}" to a placeholder in Col $targetColumnId');
+
+    // 2. Cập nhật `nextItemId` cho item con gốc
+    // (Logic này có thể được tách ra thành hàm helper để tái sử dụng)
+    debugPrint('  2. Updating source of child item...');
+    for (var i = 0; i < updatedColumns.length; i++) {
+        if (updatedColumns[i].id == childItem.columnId) {
+            final updatedSourceItems = updatedColumns[i].items.map((item) {
+                if (item.id == childItem.id) {
+                    debugPrint('    - Found and updated child source "${item.name}". Setting nextItemId to ${upgradedParent.id.substring(0,8)}');
+                    return item.copyWith(nextItemId: upgradedParent.id);
+                }
+                return item;
+            }).toList();
+            updatedColumns[i] = updatedColumns[i].copyWith(items: updatedSourceItems);
+            break;
+        }
+    }
+
+    _logAllColumnsState('UpgradeToPlaceholderRequested', updatedColumns);
+    emit(state.copyWith(columns: updatedColumns));
+}
 
   void _onRemoveColumn(RemoveColumn event, Emitter<DragDropState> emit) {
     // Sẽ cần implement logic này sau

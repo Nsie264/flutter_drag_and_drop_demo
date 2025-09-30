@@ -23,22 +23,61 @@ class WorkflowItemWidget extends StatelessWidget {
     return DragTarget<Item>(
       onWillAcceptWithDetails: (details) {
         final draggedItem = details.data;
-        final canAccept =
-            item.columnId > draggedItem.columnId &&
-            item.originalId != draggedItem.originalId &&
-            item.potentialParentOriginalId ==
+        final targetItem = item; // Để code dễ đọc hơn
+
+        // Chặn các hành động không hợp lệ ngay từ đầu
+        if (draggedItem.columnId <= 1 ||
+            targetItem.columnId <= draggedItem.columnId) {
+          return false;
+        }
+
+        // Kịch bản 1: Thả vào "anh em" để tạo nhóm
+        final bool canAcceptSibling =
+            !targetItem.isGroupPlaceholder &&
+            targetItem.originalId != draggedItem.originalId &&
+            targetItem.potentialParentOriginalId ==
                 draggedItem.potentialParentOriginalId;
 
-        final canDropOnPlaceholder =
-            item.isGroupPlaceholder &&
-            item.originalId == draggedItem.potentialParentOriginalId;
+        // Kịch bản 2: Thả con vào CHA ĐẠI DIỆN (placeholder)
+        final bool canDropOnParentPlaceholder =
+            targetItem.isGroupPlaceholder &&
+            targetItem.originalId == draggedItem.potentialParentOriginalId;
 
-        return (canAccept || canDropOnPlaceholder) && draggedItem.columnId > 1;
+        // Kịch bản 3: Thả con vào CHA (dạng thường) để nâng cấp
+        final bool canUpgradeToPlaceholder =
+            !targetItem.isGroupPlaceholder &&
+            targetItem.originalId == draggedItem.potentialParentOriginalId;
+
+        return canAcceptSibling ||
+            canDropOnParentPlaceholder ||
+            canUpgradeToPlaceholder;
       },
       onAcceptWithDetails: (details) {
-        context.read<DragDropBloc>().add(
-          MergeItemsRequested(draggedItem: details.data, targetItem: item),
-        );
+        final draggedItem = details.data;
+        final targetItem = item;
+
+        // Phân luồng để gửi đúng event dựa trên kịch bản
+        final bool isUpgradeRequest =
+            !targetItem.isGroupPlaceholder &&
+            targetItem.originalId == draggedItem.potentialParentOriginalId;
+
+        if (isUpgradeRequest) {
+          // Gửi event "Nâng cấp thành Placeholder"
+          context.read<DragDropBloc>().add(
+            UpgradeToPlaceholderRequested(
+              childItem: draggedItem,
+              parentTargetItem: targetItem,
+            ),
+          );
+        } else {
+          // Gửi event gộp nhóm thông thường (tạo nhóm hoặc thêm vào nhóm đã có)
+          context.read<DragDropBloc>().add(
+            MergeItemsRequested(
+              draggedItem: draggedItem,
+              targetItem: targetItem,
+            ),
+          );
+        }
       },
       builder: (context, candidateData, rejectedData) {
         final isTargetForMerge = candidateData.isNotEmpty;
@@ -46,7 +85,6 @@ class WorkflowItemWidget extends StatelessWidget {
         return Stack(
           clipBehavior: Clip.none,
           children: [
-            // === DRAGGABLE PHẦN ITEM ===
             Draggable<Item>(
               data: item,
               feedback: Material(
@@ -54,7 +92,7 @@ class WorkflowItemWidget extends StatelessWidget {
                 child: Theme(
                   data: Theme.of(context),
                   child: SizedBox(
-                    width: columnWidth - 16, // chỉ giới hạn feedback
+                    width: columnWidth - 16,
                     child: _buildBox(context, isDragging: true),
                   ),
                 ),
@@ -79,8 +117,6 @@ class WorkflowItemWidget extends StatelessWidget {
                 ),
               ),
             ),
-
-            // === NÚT XOÁ ĐẶT NGOÀI DRAGGABLE ===
             Positioned(
               top: item.isGroupPlaceholder ? -6 : -8,
               right: item.isGroupPlaceholder ? -10 : -12,
@@ -111,6 +147,7 @@ class WorkflowItemWidget extends StatelessWidget {
     bool isDragging = false,
     bool isTargetForMerge = false,
   }) {
+    // Không dùng SizedBox ở đây nữa vì Draggable đã xử lý
     if (item.isGroupPlaceholder) {
       return _buildPlaceholderBox(context, key, isDragging, isTargetForMerge);
     } else {
@@ -118,7 +155,6 @@ class WorkflowItemWidget extends StatelessWidget {
     }
   }
 
-  // === ITEM THƯỜNG ===
   Widget _buildRegularItemBox(
     BuildContext context,
     Key? key,
@@ -170,7 +206,6 @@ class WorkflowItemWidget extends StatelessWidget {
     );
   }
 
-  // === PLACEHOLDER GROUP ===
   Widget _buildPlaceholderBox(
     BuildContext context,
     Key? key,
