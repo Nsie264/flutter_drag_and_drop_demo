@@ -7,11 +7,15 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:collection/collection.dart';
 
 // Widget helper để render một ô item trong Cột Nguồn
-Widget _buildSourceItemTile(BuildContext context, Item item, {required DragRole role}) {
+Widget _buildSourceItemTile(
+  BuildContext context,
+  Item item, {
+  required DragRole role,
+}) {
   final bool isParentRole = role == DragRole.parent;
-  
+
   return Draggable<Item>(
-    data: item.copyWith(dragRole: role), 
+    data: item.copyWith(dragRole: role),
     feedback: Material(
       color: Colors.transparent,
       child: Theme(
@@ -24,20 +28,30 @@ Widget _buildSourceItemTile(BuildContext context, Item item, {required DragRole 
             decoration: BoxDecoration(
               color: item.isUsed
                   ? Colors.grey.shade300
-                  : (isParentRole ? Colors.amber.shade100 : Colors.blue.shade100),
+                  : (isParentRole
+                        ? Colors.amber.shade100
+                        : Colors.blue.shade100),
               borderRadius: BorderRadius.circular(4),
               boxShadow: const [
-                BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(2, 2)),
-              ]
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 4,
+                  offset: Offset(2, 2),
+                ),
+              ],
             ),
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
                 item.name,
                 style: TextStyle(
-                  fontWeight: isParentRole ? FontWeight.bold : FontWeight.normal,
+                  fontWeight: isParentRole
+                      ? FontWeight.bold
+                      : FontWeight.normal,
                   color: item.isUsed ? Colors.grey.shade600 : Colors.black,
-                  decoration: item.isUsed ? TextDecoration.lineThrough : TextDecoration.none,
+                  decoration: item.isUsed
+                      ? TextDecoration.lineThrough
+                      : TextDecoration.none,
                 ),
               ),
             ),
@@ -52,7 +66,9 @@ Widget _buildSourceItemTile(BuildContext context, Item item, {required DragRole 
         margin: const EdgeInsets.symmetric(vertical: 2.0),
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
-          color: item.isUsed ? Colors.grey.shade300 : (isParentRole ? Colors.amber.shade100 : Colors.blue.shade100),
+          color: item.isUsed
+              ? Colors.grey.shade300
+              : (isParentRole ? Colors.amber.shade100 : Colors.blue.shade100),
           borderRadius: BorderRadius.circular(4),
         ),
         child: Align(
@@ -62,7 +78,9 @@ Widget _buildSourceItemTile(BuildContext context, Item item, {required DragRole 
             style: TextStyle(
               fontWeight: isParentRole ? FontWeight.bold : FontWeight.normal,
               color: item.isUsed ? Colors.grey.shade600 : Colors.black,
-              decoration: item.isUsed ? TextDecoration.lineThrough : TextDecoration.none,
+              decoration: item.isUsed
+                  ? TextDecoration.lineThrough
+                  : TextDecoration.none,
             ),
           ),
         ),
@@ -73,7 +91,9 @@ Widget _buildSourceItemTile(BuildContext context, Item item, {required DragRole 
       margin: const EdgeInsets.symmetric(vertical: 2.0),
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: item.isUsed ? Colors.grey.shade300 : (isParentRole ? Colors.amber.shade100 : Colors.blue.shade100),
+        color: item.isUsed
+            ? Colors.grey.shade300
+            : (isParentRole ? Colors.amber.shade100 : Colors.blue.shade100),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Align(
@@ -83,7 +103,9 @@ Widget _buildSourceItemTile(BuildContext context, Item item, {required DragRole 
           style: TextStyle(
             fontWeight: isParentRole ? FontWeight.bold : FontWeight.normal,
             color: item.isUsed ? Colors.grey.shade600 : Colors.black,
-            decoration: item.isUsed ? TextDecoration.lineThrough : TextDecoration.none,
+            decoration: item.isUsed
+                ? TextDecoration.lineThrough
+                : TextDecoration.none,
           ),
         ),
       ),
@@ -117,11 +139,21 @@ class ColumnWidget extends StatelessWidget {
       onWillAcceptWithDetails: (details) {
         final item = details.data;
         bool isAlreadyInTarget = false;
-        if(item.columnId == 1 && item.dragRole == DragRole.parent){
-          final sourceItems = context.read<DragDropBloc>().state.sourceColumn.items;
-          final childrenToMove = sourceItems.where((child) => child.parentId == item.id && !child.isUsed);
-          final originalIdsToMove = childrenToMove.map((c) => c.originalId).toSet();
-          isAlreadyInTarget = items.any((i) => originalIdsToMove.contains(i.originalId));
+        if (item.columnId == 1 && item.dragRole == DragRole.parent) {
+          final sourceItems = context
+              .read<DragDropBloc>()
+              .state
+              .sourceColumn
+              .items;
+          final childrenToMove = sourceItems.where(
+            (child) => child.parentId == item.id && !child.isUsed,
+          );
+          final originalIdsToMove = childrenToMove
+              .map((c) => c.originalId)
+              .toSet();
+          isAlreadyInTarget = items.any(
+            (i) => originalIdsToMove.contains(i.originalId),
+          );
         } else {
           isAlreadyInTarget = items.any((i) => i.originalId == item.originalId);
         }
@@ -131,16 +163,17 @@ class ColumnWidget extends StatelessWidget {
         final draggedItem = details.data;
         // PHÂN LUỒNG LOGIC TẠI ĐÂY
         if (draggedItem.dragMode == DragMode.group) {
-          context.read<DragDropBloc>().add(GroupDropped(
-            representativeItem: draggedItem,
-            targetColumnId: columnId,
-          ));
+          context.read<DragDropBloc>().add(
+            GroupDropped(
+              representativeItem: draggedItem,
+              targetColumnId: columnId,
+            ),
+          );
         } else {
           // Logic cũ cho item đơn
-          context.read<DragDropBloc>().add(ItemDropped(
-            item: draggedItem,
-            targetColumnId: columnId,
-          ));
+          context.read<DragDropBloc>().add(
+            ItemDropped(item: draggedItem, targetColumnId: columnId),
+          );
         }
       },
       builder: (context, candidateData, rejectedData) {
@@ -153,7 +186,8 @@ class ColumnWidget extends StatelessWidget {
             color: isTarget ? Colors.lightGreen.shade100 : Colors.grey.shade100,
             borderRadius: BorderRadius.circular(8.0),
             border: Border.all(
-              color: isTarget ? Colors.green : Colors.transparent, width: 2,
+              color: isTarget ? Colors.green : Colors.transparent,
+              width: 2,
             ),
           ),
           child: Column(
@@ -164,11 +198,22 @@ class ColumnWidget extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                     if (columnId > 1)
                       IconButton(
                         icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                        onPressed: () {},
+                        // GỬI EVENT KHI NHẤN NÚT
+                        onPressed: () {
+                          context.read<DragDropBloc>().add(RemoveColumn(columnId: columnId));
+                        },
+                        tooltip: 'Xóa cột',
                         splashRadius: 20,
                       )
                   ],
@@ -192,11 +237,19 @@ class ColumnWidget extends StatelessWidget {
       if (!a.isUsed && b.isUsed) return -1;
       return a.originalId.compareTo(b.originalId);
     });
-    final visibleItems = sortedItems.where((item) => item.itemLevel >= displayLevelStart && item.itemLevel <= displayLevelStart + 1).toList();
+    final visibleItems = sortedItems
+        .where(
+          (item) =>
+              item.itemLevel >= displayLevelStart &&
+              item.itemLevel <= displayLevelStart + 1,
+        )
+        .toList();
     final visibleItemsById = {for (var item in visibleItems) item.id: item};
     final List<Item> rootItemsToRender = [];
     for (final item in visibleItems) {
-      if (item.itemLevel == displayLevelStart || (item.parentId == null || !visibleItemsById.containsKey(item.parentId))) {
+      if (item.itemLevel == displayLevelStart ||
+          (item.parentId == null ||
+              !visibleItemsById.containsKey(item.parentId))) {
         rootItemsToRender.add(item);
       }
     }
@@ -207,34 +260,64 @@ class ColumnWidget extends StatelessWidget {
       itemBuilder: (context, index) {
         final rootItem = rootItemsToRender[index];
         if (rootItem.itemLevel == displayLevelStart) {
-          final childrenInView = visibleItems.where((child) => child.parentId == rootItem.id).toList();
+          final childrenInView = visibleItems
+              .where((child) => child.parentId == rootItem.id)
+              .toList();
           final isParentDisabled = rootItem.isUsed;
-          
+
           if (childrenInView.isEmpty) {
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 2.0),
-              child: isParentDisabled 
-                ? IgnorePointer(child: _buildSourceItemTile(context, rootItem, role: DragRole.parent))
-                : _buildSourceItemTile(context, rootItem, role: DragRole.parent),
+              child: isParentDisabled
+                  ? IgnorePointer(
+                      child: _buildSourceItemTile(
+                        context,
+                        rootItem,
+                        role: DragRole.parent,
+                      ),
+                    )
+                  : _buildSourceItemTile(
+                      context,
+                      rootItem,
+                      role: DragRole.parent,
+                    ),
             );
           }
-          
+
           return ExpansionTile(
             key: PageStorageKey(rootItem.id),
             tilePadding: EdgeInsets.zero,
-            title: isParentDisabled 
-              ? IgnorePointer(child: _buildSourceItemTile(context, rootItem, role: DragRole.parent))
-              : _buildSourceItemTile(context, rootItem, role: DragRole.parent),
+            title: isParentDisabled
+                ? IgnorePointer(
+                    child: _buildSourceItemTile(
+                      context,
+                      rootItem,
+                      role: DragRole.parent,
+                    ),
+                  )
+                : _buildSourceItemTile(
+                    context,
+                    rootItem,
+                    role: DragRole.parent,
+                  ),
             initiallyExpanded: false,
             childrenPadding: const EdgeInsets.only(left: 16),
             children: childrenInView.map((childItem) {
-              return _buildSourceItemTile(context, childItem, role: DragRole.child);
+              return _buildSourceItemTile(
+                context,
+                childItem,
+                role: DragRole.child,
+              );
             }).toList(),
           );
         } else {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 2.0),
-            child: _buildSourceItemTile(context, rootItem, role: DragRole.child),
+            child: _buildSourceItemTile(
+              context,
+              rootItem,
+              role: DragRole.child,
+            ),
           );
         }
       },
@@ -243,30 +326,64 @@ class ColumnWidget extends StatelessWidget {
 
   Widget _buildWorkflowColumnContent(BuildContext context) {
     if (items.isEmpty) {
-      return const Center(child: Text('Kéo item vào đây', style: TextStyle(color: Colors.grey)));
+      return const Center(
+        child: Text('Kéo item vào đây', style: TextStyle(color: Colors.grey)),
+      );
     }
     final masterItems = context.read<DragDropBloc>().state.masterItems;
     final placeholders = items.where((i) => i.isGroupPlaceholder).toList();
-    final childrenItems = items.where((i) => !i.isGroupPlaceholder && i.potentialParentOriginalId != null).toList();
-    final orphanItems = items.where((i) => !i.isGroupPlaceholder && i.potentialParentOriginalId == null).toList();
-    final groupedChildren = groupBy<Item, String>(childrenItems, (item) => item.potentialParentOriginalId!);
+    final childrenItems = items
+        .where(
+          (i) => !i.isGroupPlaceholder && i.potentialParentOriginalId != null,
+        )
+        .toList();
+    final orphanItems = items
+        .where(
+          (i) => !i.isGroupPlaceholder && i.potentialParentOriginalId == null,
+        )
+        .toList();
+    final groupedChildren = groupBy<Item, String>(
+      childrenItems,
+      (item) => item.potentialParentOriginalId!,
+    );
     List<Widget> widgetsToRender = [];
-    widgetsToRender.addAll(orphanItems.map((item) => WorkflowItemWidget(
-      key: ValueKey(item.id), item: item, itemKey: itemKeys[item.id]!,
-    )));
-    widgetsToRender.addAll(placeholders.map((item) {
-      final isComplete = context.read<DragDropBloc>().isGroupComplete(item, masterItems);
-      return WorkflowItemWidget(
-        key: ValueKey(item.id), item: item, itemKey: itemKeys[item.id]!, isComplete: isComplete,
-      );
-    }));
+    widgetsToRender.addAll(
+      orphanItems.map(
+        (item) => WorkflowItemWidget(
+          key: ValueKey(item.id),
+          item: item,
+          itemKey: itemKeys[item.id]!,
+        ),
+      ),
+    );
+    widgetsToRender.addAll(
+      placeholders.map((item) {
+        final isComplete = context.read<DragDropBloc>().isGroupComplete(
+          item,
+          masterItems,
+        );
+        return WorkflowItemWidget(
+          key: ValueKey(item.id),
+          item: item,
+          itemKey: itemKeys[item.id]!,
+          isComplete: isComplete,
+        );
+      }),
+    );
     groupedChildren.forEach((parentId, children) {
-        final parentInfo = masterItems.firstWhereOrNull((m) => m.originalId == parentId);
-        if (parentInfo != null) {
-          widgetsToRender.add(GroupContainerWidget(
-            key: ValueKey(parentId), parentInfo: parentInfo, childItems: children, itemKeys: itemKeys,
-          ));
-        }
+      final parentInfo = masterItems.firstWhereOrNull(
+        (m) => m.originalId == parentId,
+      );
+      if (parentInfo != null) {
+        widgetsToRender.add(
+          GroupContainerWidget(
+            key: ValueKey(parentId),
+            parentInfo: parentInfo,
+            childItems: children,
+            itemKeys: itemKeys,
+          ),
+        );
+      }
     });
 
     return Column(

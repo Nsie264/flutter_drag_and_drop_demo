@@ -1093,7 +1093,7 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
 
     final updatedColumns = List<ColumnData>.from(state.columns)..add(newColumn);
     emit(state.copyWith(columns: updatedColumns));
-}
+  }
 
   void _onUpgradeToPlaceholderRequested(
     UpgradeToPlaceholderRequested event,
@@ -1169,8 +1169,109 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
   }
 
   void _onRemoveColumn(RemoveColumn event, Emitter<DragDropState> emit) {
-    // Sẽ cần implement logic này sau
-  }
+    final columnIdToRemove = event.columnId;
+    if (columnIdToRemove <= 1) return;
+
+    debugPrint('\n--- START [_onRemoveColumn] ---');
+    debugPrint('  Column to remove: ID $columnIdToRemove');
+
+    List<ColumnData> updatedColumns = List.from(state.columns);
+    final columnToRemoveIndex = updatedColumns.indexWhere((c) => c.id == columnIdToRemove);
+    if (columnToRemoveIndex == -1) return;
+
+    final columnToRemove = updatedColumns[columnToRemoveIndex];
+    final itemsInColumn = List<Item>.from(columnToRemove.items);
+
+    // ================================================================
+    // BƯỚC 1: Dọn dẹp liên kết ngược (nextItemId)
+    // (Không thay đổi)
+    // ================================================================
+    debugPrint('  1. Cleaning up all backward links (nextItemId) pointing to this column...');
+    final idsInColumnToRemove = itemsInColumn.map((i) => i.id).toSet();
+    if (idsInColumnToRemove.isNotEmpty) {
+        for (var i = 0; i < updatedColumns.length; i++) {
+            if (i == columnToRemoveIndex) continue;
+
+            bool columnWasUpdated = false;
+            final List<Item> cleanedItems = updatedColumns[i].items.map((item) {
+                if (item.nextItemId != null && idsInColumnToRemove.contains(item.nextItemId)) {
+                    debugPrint('    - Found link from "${item.name}" (in Col ${updatedColumns[i].id}). Resetting nextItemId.');
+                    columnWasUpdated = true;
+                    return item.copyWith(setNextItemIdToNull: true);
+                }
+                return item;
+            }).toList();
+            if (columnWasUpdated) {
+                updatedColumns[i] = updatedColumns[i].copyWith(items: cleanedItems);
+            }
+        }
+    }
+    
+    // ================================================================
+    // BƯỚC 1.5: CẬP NHẬT PLACEHOLDER CHA (LOGIC MỚI)
+    // ================================================================
+    debugPrint('  1.5. Updating parent placeholders...');
+    final originalIdsInColumnToRemove = itemsInColumn.map((i) => i.originalId).toSet();
+    if (originalIdsInColumnToRemove.isNotEmpty) {
+      for (var i = 0; i < updatedColumns.length; i++) {
+        // Không cần kiểm tra cột sắp bị xóa, vì placeholder không thể tự chứa con
+        if (i == columnToRemoveIndex) continue; 
+        
+        bool wasUpdated = false;
+        final List<Item> updatedItems = updatedColumns[i].items.map((item) {
+          if (item.isGroupPlaceholder) {
+            final originalLinks = item.linkedChildrenOriginalIds.toSet();
+            // Tìm những originalId chung giữa placeholder và cột bị xóa
+            final commonIds = originalLinks.intersection(originalIdsInColumnToRemove);
+
+            if (commonIds.isNotEmpty) {
+              final newLinks = originalLinks.difference(commonIds).toList();
+              debugPrint('    - Placeholder "${item.name}" (in Col ${item.columnId}) is losing children: $commonIds');
+              debugPrint('    - New links: $newLinks');
+              wasUpdated = true;
+              return item.copyWith(linkedChildrenOriginalIds: newLinks);
+            }
+          }
+          return item;
+        }).toList();
+
+        if (wasUpdated) {
+            updatedColumns[i] = updatedColumns[i].copyWith(items: updatedItems);
+        }
+      }
+    }
+
+
+    // ================================================================
+    // BƯỚC 2: Hồi sinh item nguồn
+    // (Không thay đổi)
+    // ================================================================
+    debugPrint('  2. Reviving items in source column...');
+    final allOtherWorkingItems = updatedColumns
+        .where((c) => c.id > 1 && c.id != columnIdToRemove)
+        .expand((c) => c.items)
+        .toList();
+
+    for (final item in itemsInColumn) {
+        final originalId = item.originalId;
+        final bool instanceExistsElsewhere = allOtherWorkingItems.any((i) => i.originalId == originalId);
+        
+        if (!instanceExistsElsewhere) {
+            debugPrint('    - Item "${item.name}" was the last instance. Reviving in source.');
+            updatedColumns = _revertIsUsedInSource(originalId, updatedColumns);
+        }
+    }
+
+    // ================================================================
+    // BƯỚC 3: Xóa cột
+    // (Không thay đổi)
+    // ================================================================
+    debugPrint('  3. Removing column ID $columnIdToRemove from state.');
+    updatedColumns.removeAt(columnToRemoveIndex);
+
+    _logAllColumnsState('RemoveColumn', updatedColumns);
+    emit(state.copyWith(columns: updatedColumns));
+}
 
   void _onLevelFilterChanged(
     LevelFilterChanged event,
