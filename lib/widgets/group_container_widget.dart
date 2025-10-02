@@ -5,12 +5,15 @@ class GroupContainerWidget extends StatelessWidget {
   final Item parentInfo;
   final List<Item> childItems;
   final Map<String, GlobalKey> itemKeys;
+  final bool isMultiSelectModeActive; // NEW
+
 
   const GroupContainerWidget({
     super.key,
     required this.parentInfo,
     required this.childItems,
     required this.itemKeys,
+    required this.isMultiSelectModeActive,
   });
 
   @override
@@ -79,6 +82,8 @@ class GroupContainerWidget extends StatelessWidget {
                 key: ValueKey(item.id),
                 item: item,
                 itemKey: itemKeys[item.id]!,
+
+                isMultiSelectModeActive: isMultiSelectModeActive, 
               );
             }).toList(),
           ),

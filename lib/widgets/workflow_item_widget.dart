@@ -1,3 +1,5 @@
+// lib/widgets/workflow_item_widget.dart
+
 import 'package:drag_and_drop/bloc/drag_drop_bloc.dart';
 import 'package:drag_and_drop/cubit/drag_cubit.dart';
 import 'package:drag_and_drop/models/item.dart';
@@ -8,6 +10,7 @@ class WorkflowItemWidget extends StatelessWidget {
   final Item item;
   final GlobalKey itemKey;
   final bool isComplete;
+  final bool isMultiSelectModeActive; // NEW: Nhận biết chế độ từ parent
 
   static const double columnWidth = 200.0;
 
@@ -16,116 +19,143 @@ class WorkflowItemWidget extends StatelessWidget {
     required this.item,
     required this.itemKey,
     this.isComplete = true,
+    required this.isMultiSelectModeActive, // NEW
   });
 
   @override
   Widget build(BuildContext context) {
-    // Xác định xem item có thể kéo được không
     final bool isDraggable = item.nextItemId == null;
+
+    // NEW: Lấy state để biết item có được chọn hay không
+    final multiSelectState = context.watch<DragDropBloc>().state;
+    final isSelected = multiSelectState.selectedItemIds.contains(item.id);
 
     // Widget nội dung chính, được bao bọc bởi DragTarget
     Widget mainContent = DragTarget<Item>(
-      // =================================================================
-      // === SỬ DỤNG LOGIC onWillAcceptWithDetails CHÍNH XÁC CỦA BẠN ===
-      // =================================================================
       onWillAcceptWithDetails: (details) {
+        // ... logic onWillAccept giữ nguyên ...
         final draggedItem = details.data;
-        final targetItem = item;
+        // NEW: Thêm logic cho multiSelect
+        if (draggedItem.dragMode == DragMode.multiSelect) {
+            // Chỉ chấp nhận nếu thả vào cột khác và là nhóm đồng nhất
+            final selectedIds = context.read<DragDropBloc>().state.selectedItemIds;
+            if (selectedIds.contains(item.id)) return false; // Không thể thả vào chính nó
 
-        // Chặn các hành động không hợp lệ ngay từ đầu
-        if (draggedItem.columnId <= 1 ||
-            targetItem.columnId <= draggedItem.columnId) {
-          return false;
+            // Logic kiểm tra đồng nhất có thể được thực hiện trong BLoC, ở đây chỉ cần kiểm tra cơ bản
+            return item.columnId > draggedItem.columnId;
         }
-
-        // Xác định parent originalId của item/group đang được kéo
+        
+        final targetItem = item;
+        if (draggedItem.columnId <= 1 ||
+            targetItem.columnId <= draggedItem.columnId) return false;
         final draggedParentOriginalId = draggedItem.potentialParentOriginalId;
         if (draggedParentOriginalId == null) return false;
-
-        // Kịch bản 1: Thả vào "anh em"
-        final bool canAcceptSibling =
-            !targetItem.isGroupPlaceholder &&
+        final bool canAcceptSibling = !targetItem.isGroupPlaceholder &&
             targetItem.originalId != draggedItem.originalId &&
             targetItem.potentialParentOriginalId == draggedParentOriginalId;
-
-        // Kịch bản 2: Thả vào CHA ĐẠI DIỆN (placeholder)
-        final bool canDropOnParentPlaceholder =
-            targetItem.isGroupPlaceholder &&
+        final bool canDropOnParentPlaceholder = targetItem.isGroupPlaceholder &&
             targetItem.originalId == draggedParentOriginalId;
-
-        // Kịch bản 3: Thả vào CHA (dạng thường) để nâng cấp
-        final bool canUpgradeToPlaceholder =
-            !targetItem.isGroupPlaceholder &&
+        final bool canUpgradeToPlaceholder = !targetItem.isGroupPlaceholder &&
             targetItem.originalId == draggedParentOriginalId;
-
-        return canAcceptSibling ||
-            canDropOnParentPlaceholder ||
-            canUpgradeToPlaceholder;
+        return canAcceptSibling || canDropOnParentPlaceholder || canUpgradeToPlaceholder;
       },
-
       onAcceptWithDetails: (details) {
         final draggedItem = details.data;
-        final targetItem = item;
-
-        // PHÂN LUỒNG LOGIC TẠI ĐÂY
-        if (draggedItem.dragMode == DragMode.group) {
-          // Gửi event gộp nhóm
-          context.read<DragDropBloc>().add(
-            MergeGroupRequested(
-              representativeItem: draggedItem,
-              targetItem: targetItem,
-            ),
-          );
-        } else {
-          // Logic cũ cho item đơn
-          final bool isUpgradeRequest =
-              !targetItem.isGroupPlaceholder &&
-              targetItem.originalId == draggedItem.potentialParentOriginalId;
-
-          if (isUpgradeRequest) {
+        
+        // MODIFIED: Phân luồng logic dựa trên dragMode
+        switch(draggedItem.dragMode) {
+          case DragMode.multiSelect:
             context.read<DragDropBloc>().add(
-              UpgradeToPlaceholderRequested(
-                childItem: draggedItem,
-                parentTargetItem: targetItem,
+              MultiSelectionDropped(
+                representativeItem: draggedItem,
+                targetColumnId: item.columnId,
+                targetItem: item, // Thả vào item này
+              )
+            );
+            break;
+          case DragMode.group:
+            context.read<DragDropBloc>().add(
+              MergeGroupRequested(
+                representativeItem: draggedItem,
+                targetItem: item,
               ),
             );
-          } else {
-            context.read<DragDropBloc>().add(
-              MergeItemsRequested(
-                draggedItem: draggedItem,
-                targetItem: targetItem,
-              ),
-            );
-          }
+            break;
+          case DragMode.single:
+          default:
+            final targetItem = item;
+            final bool isUpgradeRequest = !targetItem.isGroupPlaceholder &&
+                targetItem.originalId == draggedItem.potentialParentOriginalId;
+            if (isUpgradeRequest) {
+              context.read<DragDropBloc>().add(
+                UpgradeToPlaceholderRequested(
+                  childItem: draggedItem,
+                  parentTargetItem: targetItem,
+                ),
+              );
+            } else {
+              context.read<DragDropBloc>().add(
+                MergeItemsRequested(
+                  draggedItem: draggedItem,
+                  targetItem: targetItem,
+                ),
+              );
+            }
+            break;
         }
       },
       builder: (context, candidateData, rejectedData) {
         final isTargetForMerge = candidateData.isNotEmpty;
+        
+        // NEW: Widget item box
+        Widget itemBox = _buildBox(
+          context,
+          isTargetForMerge: isTargetForMerge,
+          key: itemKey,
+          isLinked: !isDraggable,
+          isSelected: isSelected, // Truyền trạng thái được chọn
+        );
+
+        // NEW: Bọc trong Row để thêm Checkbox
+        Widget itemWithCheckbox = (isMultiSelectModeActive && isDraggable)
+            ? Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Checkbox(
+                    value: isSelected,
+                    onChanged: (bool? value) {
+                      if (value != null) {
+                        context.read<DragDropBloc>().add(
+                              ItemSelectionChanged(itemId: item.id, isSelected: value),
+                            );
+                      }
+                    },
+                  ),
+                  Expanded(child: itemBox),
+                ],
+              )
+            : itemBox; // Nếu không thì hiển thị box như cũ
+
         return Stack(
           clipBehavior: Clip.none,
           children: [
-            SizedBox( 
+            SizedBox(
               width: columnWidth - 16,
-              child: _buildBox(
-                context,
-                isTargetForMerge: isTargetForMerge,
-                key: itemKey,
-                isLinked: !isDraggable, 
-              ),
+              child: itemWithCheckbox,
             ),
             Positioned(
               top: item.isGroupPlaceholder ? -6 : -8,
               right: item.isGroupPlaceholder ? -10 : -12,
               child: IconButton(
-                 icon: Icon(
+                icon: Icon(
                   Icons.close_rounded,
                   size: item.isGroupPlaceholder ? 20 : 18,
                   color: Colors.red.shade300,
                 ),
                 onPressed: () {
                   context.read<DragDropBloc>().add(
-                    RemoveWorkflowItem(itemToRemove: item),
-                  );
+                        RemoveWorkflowItem(itemToRemove: item),
+                      );
                 },
                 splashRadius: item.isGroupPlaceholder ? 10 : 5,
                 tooltip: item.isGroupPlaceholder ? 'Xóa tổ' : 'Xóa chi tiết',
@@ -136,73 +166,100 @@ class WorkflowItemWidget extends StatelessWidget {
       },
     );
 
-    // Chỉ bọc bằng Draggable nếu isDraggable là true 
     if (isDraggable) {
       return Draggable<Item>(
-        data: item,
-        feedback: Material(
-          color: Colors.transparent,
-          child: Theme(
-            data: Theme.of(context),
-            child: SizedBox(
-              width: columnWidth - 16,
-              child: _buildBox(context, isDragging: true),
-            ),
-          ),
-        ),
-        childWhenDragging: Opacity(
-          opacity: 0.5,
-          child: mainContent, // Hiển thị nội dung chính khi đang kéo
-        ),
+        // MODIFIED: Cập nhật data và feedback
+        data: (isMultiSelectModeActive && isSelected)
+            ? item.copyWith(dragMode: DragMode.multiSelect)
+            : item,
+        feedback: (isMultiSelectModeActive && isSelected)
+            ? Material(
+                color: Colors.transparent,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade200,
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: const [
+                      BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 4,
+                          offset: Offset(2, 2)),
+                    ],
+                  ),
+                  child: Text(
+                    '${multiSelectState.selectedItemIds.length} items',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+              )
+            : Material( // Feedback cũ
+                color: Colors.transparent,
+                child: Theme(
+                  data: Theme.of(context),
+                  child: SizedBox(
+                    width: columnWidth - 16,
+                    child: _buildBox(context, isDragging: true, isSelected: false),
+                  ),
+                ),
+              ),
+        childWhenDragging: Opacity(opacity: 0.5, child: mainContent),
         onDragStarted: () => context.read<DragCubit>().startDragging(),
         onDragEnd: (_) => context.read<DragCubit>().endDragging(),
         onDraggableCanceled: (_, __) => context.read<DragCubit>().endDragging(),
-        child: mainContent, // Nội dung hiển thị bình thường
+        child: mainContent,
       );
     } else {
-      // Nếu không thể kéo, chỉ trả về nội dung chính (vẫn có DragTarget)
       return mainContent;
     }
   }
-  
+
+  // MODIFIED: Thêm tham số isSelected
   Widget _buildBox(
     BuildContext context, {
     Key? key,
     bool isDragging = false,
     bool isTargetForMerge = false,
-    bool isLinked = false, 
+    bool isLinked = false,
+    required bool isSelected,
   }) {
     if (item.isGroupPlaceholder) {
-      return _buildPlaceholderBox(context, key, isDragging, isTargetForMerge, isLinked);
+      return _buildPlaceholderBox(
+          context, key, isDragging, isTargetForMerge, isLinked, isSelected);
     } else {
-      return _buildRegularItemBox(context, key, isDragging, isTargetForMerge, isLinked);
+      return _buildRegularItemBox(
+          context, key, isDragging, isTargetForMerge, isLinked, isSelected);
     }
   }
 
-  Widget _buildRegularItemBox(
-    BuildContext context,
-    Key? key,
-    bool isDragging,
-    bool isTargetForMerge,
-    bool isLinked,
-  ) {
+  // MODIFIED: Thêm tham số isSelected và áp dụng style
+  Widget _buildRegularItemBox(BuildContext context, Key? key, bool isDragging,
+      bool isTargetForMerge, bool isLinked, bool isSelected) {
     return Container(
       key: key,
       margin: const EdgeInsets.symmetric(vertical: 4),
       padding: const EdgeInsets.symmetric(horizontal: 12.0),
       decoration: BoxDecoration(
-        color: isLinked 
-            ? Colors.blue.shade50 
-            : (isTargetForMerge ? Colors.lightBlue.shade50 : Colors.blue.shade100),
+        color: isLinked
+            ? Colors.blue.shade50
+            : (isTargetForMerge
+                ? Colors.lightBlue.shade50
+                : Colors.blue.shade100),
         borderRadius: BorderRadius.circular(4.0),
         border: Border.all(
-          color: isTargetForMerge ? Colors.blue.shade400 : Colors.blue.shade200,
-          width: isTargetForMerge ? 2 : 1,
+          // NEW: Thay đổi border khi được chọn
+          color: isSelected
+              ? Colors.blue.shade700
+              : (isTargetForMerge
+                  ? Colors.blue.shade400
+                  : Colors.blue.shade200),
+          width: isSelected ? 2 : (isTargetForMerge ? 2 : 1),
         ),
         boxShadow: isDragging
             ? [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha:  0.2),
+                  color: Colors.black.withOpacity(0.2),
                   blurRadius: 4,
                   offset: const Offset(0, 2),
                 ),
@@ -218,7 +275,7 @@ class WorkflowItemWidget extends StatelessWidget {
               child: Text(
                 item.name,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle( 
+                style: TextStyle(
                   color: isLinked ? Colors.black54 : Colors.black,
                 ),
               ),
@@ -238,34 +295,33 @@ class WorkflowItemWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildPlaceholderBox(
-    BuildContext context,
-    Key? key,
-    bool isDragging,
-    bool isTargetForMerge,
-    bool isLinked,
-  ) {
+  // MODIFIED: Thêm tham số isSelected và áp dụng style
+  Widget _buildPlaceholderBox(BuildContext context, Key? key, bool isDragging,
+      bool isTargetForMerge, bool isLinked, bool isSelected) {
     return Container(
       key: key,
       margin: const EdgeInsets.symmetric(vertical: 4),
       padding: const EdgeInsets.all(12.0),
       decoration: BoxDecoration(
         color: isLinked
-            ? Colors.grey.shade200 
+            ? Colors.grey.shade200
             : (isTargetForMerge ? Colors.green.shade50 : Colors.white),
         borderRadius: BorderRadius.circular(8.0),
         border: Border.all(
-          color: isComplete
-              ? (isTargetForMerge ? Colors.green : Colors.grey.shade400)
-              : (isTargetForMerge
-                    ? Colors.orange.shade700
-                    : Colors.orange.shade400),
-          width: isComplete ? 1 : 2,
+          // NEW: Thay đổi border khi được chọn
+          color: isSelected
+              ? Colors.blue.shade700
+              : (isComplete
+                  ? (isTargetForMerge ? Colors.green : Colors.grey.shade400)
+                  : (isTargetForMerge
+                      ? Colors.orange.shade700
+                      : Colors.orange.shade400)),
+          width: isSelected ? 2 : (isComplete ? 1 : 2),
         ),
         boxShadow: isDragging
             ? [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha:  0.2),
+                  color: Colors.black.withOpacity(0.2),
                   blurRadius: 4,
                   offset: const Offset(0, 2),
                 ),

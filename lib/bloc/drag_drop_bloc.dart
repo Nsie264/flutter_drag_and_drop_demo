@@ -81,11 +81,394 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
     on<LoadItemsFromData>(_onLoadItemsFromData);
     on<UpgradeToPlaceholderRequested>(_onUpgradeToPlaceholderRequested);
 
-    on<GroupDropped>(_onGroupDropped); // <-- Thêm handler mới
-    on<MergeGroupRequested>(_onMergeGroupRequested); // <-- Thêm handler mới
+    on<GroupDropped>(_onGroupDropped);
+    on<MergeGroupRequested>(_onMergeGroupRequested);
+
+    on<ToggleMultiSelectMode>(_onToggleMultiSelectMode);
+    on<ItemSelectionChanged>(_onItemSelectionChanged);
+    on<MultiSelectionDropped>(_onMultiSelectionDropped);
 
     on<AddNewColumn>(_onAddNewColumn);
     on<RemoveColumn>(_onRemoveColumn);
+  }
+
+  void _performMultiItemMerge(
+    List<Item> itemsToMerge,
+    Item targetItem,
+    Emitter<DragDropState> emit,
+  ) {
+    if (itemsToMerge.isEmpty) return;
+
+    final commonParentOriginalId = itemsToMerge.first.potentialParentOriginalId;
+    final toColumnId = targetItem.columnId;
+
+    debugPrint('\n\n\x1B[35m--- START [_performMultiItemMerge] --- \x1B[0m');
+    debugPrint(
+      '  \x1B[33mMerging ${itemsToMerge.length} items into Target:\x1B[0m "${targetItem.name}" (ID: ${targetItem.id.substring(0, 8)}) in Col $toColumnId',
+    );
+    debugPrint('  Common Parent Original ID: $commonParentOriginalId');
+
+    List<ColumnData> updatedColumns = List.from(state.columns);
+    final toColIndex = updatedColumns.indexWhere((c) => c.id == toColumnId);
+    if (toColIndex == -1) return;
+
+    final originalIdsToLink = itemsToMerge.map((i) => i.originalId).toSet();
+
+    // =================================================================
+    // KỊCH BẢN 1: Thả vào một "cha đại diện" (placeholder) đã tồn tại
+    // =================================================================
+    if (targetItem.isGroupPlaceholder &&
+        targetItem.originalId == commonParentOriginalId) {
+      debugPrint(
+        '  \x1B[36mSCENARIO 1: Merging into an existing Placeholder.\x1B[0m',
+      );
+
+      // 1. Cập nhật placeholder ở cột đích
+      var toColumn = updatedColumns[toColIndex];
+      final updatedLinkedIds = {
+        ...targetItem.linkedChildrenOriginalIds,
+        ...originalIdsToLink,
+      }.toList();
+      final updatedPlaceholder = targetItem.copyWith(
+        linkedChildrenOriginalIds: updatedLinkedIds,
+      );
+
+      final updatedToItems = toColumn.items
+          .map((i) => i.id == targetItem.id ? updatedPlaceholder : i)
+          .toList();
+      updatedColumns[toColIndex] = toColumn.copyWith(items: updatedToItems);
+
+      // 2. Cập nhật nextItemId cho TẤT CẢ các item nguồn
+      final sourceItemIdsToUpdate = itemsToMerge.map((i) => i.id).toSet();
+      for (var i = 0; i < updatedColumns.length; i++) {
+        updatedColumns[i] = updatedColumns[i].copyWith(
+          items: updatedColumns[i].items.map((item) {
+            if (sourceItemIdsToUpdate.contains(item.id)) {
+              return item.copyWith(nextItemId: targetItem.id);
+            }
+            return item;
+          }).toList(),
+        );
+      }
+    }
+    // =================================================================
+    // KỊCH BẢN 2: Thả vào một item "cha" để nâng cấp thành placeholder
+    // =================================================================
+    else if (!targetItem.isGroupPlaceholder &&
+        targetItem.originalId == commonParentOriginalId) {
+      debugPrint(
+        '  \x1B[36mSCENARIO 2: Upgrading a Parent item to a Placeholder.\x1B[0m',
+      );
+
+      // 1. Đánh dấu cha ở Cột Nguồn là đã sử dụng
+      updatedColumns = _markSourceItemAsUsed(
+        targetItem.originalId,
+        updatedColumns,
+      );
+
+      // 2. Nâng cấp item cha ở cột đích
+      var toColumn = updatedColumns[toColIndex];
+      final upgradedPlaceholder = targetItem.copyWith(
+        isGroupPlaceholder: true,
+        linkedChildrenOriginalIds: {
+          ...targetItem.linkedChildrenOriginalIds,
+          ...originalIdsToLink,
+        }.toList(),
+      );
+
+      final updatedToItems = toColumn.items
+          .map((i) => i.id == targetItem.id ? upgradedPlaceholder : i)
+          .toList();
+      updatedColumns[toColIndex] = toColumn.copyWith(items: updatedToItems);
+
+      // 3. Cập nhật nextItemId cho TẤT CẢ các item nguồn
+      final sourceItemIdsToUpdate = itemsToMerge.map((i) => i.id).toSet();
+      for (var i = 0; i < updatedColumns.length; i++) {
+        updatedColumns[i] = updatedColumns[i].copyWith(
+          items: updatedColumns[i].items.map((item) {
+            if (sourceItemIdsToUpdate.contains(item.id)) {
+              return item.copyWith(nextItemId: targetItem.id);
+            }
+            return item;
+          }).toList(),
+        );
+      }
+    }
+    // =================================================================
+    // KỊCH BẢN 3: Thả vào một item "anh em" để "triệu hồi" placeholder
+    // =================================================================
+    else if (!targetItem.isGroupPlaceholder &&
+        targetItem.potentialParentOriginalId == commonParentOriginalId) {
+      debugPrint(
+        '  \x1B[36mSCENARIO 3: Dropping onto a sibling item to summon a Placeholder.\x1B[0m',
+      );
+
+      final actualParentTemplate = _findActualParent(
+        itemsToMerge.first,
+        state.masterItems,
+      );
+      if (actualParentTemplate == null) return;
+
+      // 1. Đánh dấu cha ở Cột Nguồn là đã sử dụng
+      updatedColumns = _markSourceItemAsUsed(
+        actualParentTemplate.originalId,
+        updatedColumns,
+      );
+
+      // 2. Tạo placeholder mới
+      final newPlaceholderId = _uuid.v4();
+      final newPlaceholder = Item(
+        id: newPlaceholderId,
+        originalId: actualParentTemplate.originalId,
+        name: actualParentTemplate.name,
+        columnId: toColumnId,
+        isGroupPlaceholder: true,
+        linkedChildrenOriginalIds: {
+          ...originalIdsToLink,
+          targetItem.originalId,
+        }.toList(),
+      );
+
+      // 3. Cập nhật cột đích: Xóa item đích, thêm placeholder
+      var toColumn = updatedColumns[toColIndex];
+      var updatedToItems = List<Item>.from(toColumn.items)
+        ..removeWhere((i) => i.id == targetItem.id)
+        ..add(newPlaceholder);
+      updatedColumns[toColIndex] = toColumn.copyWith(items: updatedToItems);
+
+      // 4. Tìm tất cả các ID nguồn cần cập nhật (của các item được kéo VÀ của item đích)
+      final allSourceIdsToUpdate = itemsToMerge.map((i) => i.id).toSet();
+      // Tìm nguồn của targetItem
+      final allItems = updatedColumns.expand((col) => col.items).toList();
+      final sourceOfTarget = allItems.firstWhere(
+        (item) => item.nextItemId == targetItem.id,
+        orElse: () => targetItem,
+      );
+      allSourceIdsToUpdate.add(sourceOfTarget.id);
+
+      // 5. Cập nhật nextItemId cho TẤT CẢ các item nguồn liên quan
+      for (var i = 0; i < updatedColumns.length; i++) {
+        updatedColumns[i] = updatedColumns[i].copyWith(
+          items: updatedColumns[i].items.map((item) {
+            if (allSourceIdsToUpdate.contains(item.id)) {
+              return item.copyWith(nextItemId: newPlaceholderId);
+            }
+            return item;
+          }).toList(),
+        );
+      }
+    } else {
+      debugPrint('  \x1B[31mSCENARIO FAILED: Drop condition not met.\x1B[0m');
+      return; // Không làm gì nếu không khớp kịch bản nào
+    }
+
+    _logAllColumnsState('PerformMultiItemMerge', updatedColumns);
+    emit(state.copyWith(columns: updatedColumns));
+  }
+
+  void _onToggleMultiSelectMode(
+    ToggleMultiSelectMode event,
+    Emitter<DragDropState> emit,
+  ) {
+    // Nếu nhấn vào cột đã active -> tắt chế độ
+    if (state.multiSelectActiveColumnId == event.columnId) {
+      emit(
+        state.copyWith(
+          clearMultiSelectColumn: true, // Dùng flag để reset về null
+          selectedItemIds: {}, // Xóa hết các item đã chọn
+        ),
+      );
+    } else {
+      // Nếu nhấn vào cột mới -> kích hoạt nó
+      emit(
+        state.copyWith(
+          multiSelectActiveColumnId: event.columnId,
+          selectedItemIds: {}, // Xóa lựa chọn cũ khi chuyển cột
+        ),
+      );
+    }
+  }
+
+  void _onItemSelectionChanged(
+    ItemSelectionChanged event,
+    Emitter<DragDropState> emit,
+  ) {
+    final updatedSelection = Set<String>.from(state.selectedItemIds);
+    if (event.isSelected) {
+      updatedSelection.add(event.itemId);
+    } else {
+      updatedSelection.remove(event.itemId);
+    }
+    emit(state.copyWith(selectedItemIds: updatedSelection));
+  }
+
+  void _handleMultiDropToColumn(
+    List<Item> itemsToDrop,
+    int targetColumnId,
+    Emitter<DragDropState> emit,
+  ) {
+    if (itemsToDrop.isEmpty) return;
+
+    final fromColumnId = itemsToDrop.first.columnId;
+
+    // Logic chặn cơ bản
+    if (fromColumnId >= targetColumnId || fromColumnId == 0) {
+      return;
+    }
+
+    List<ColumnData> updatedColumns = List.from(state.columns);
+    final fromIndex = updatedColumns.indexWhere((c) => c.id == fromColumnId);
+    final toIndex = updatedColumns.indexWhere((c) => c.id == targetColumnId);
+
+    if (fromIndex == -1 || toIndex == -1) return;
+
+    var sourceColumn = updatedColumns[fromIndex];
+    var targetColumn = updatedColumns[toIndex];
+
+    // Logic chống trùng lặp: Lấy tất cả originalId của các item sẽ được thêm vào
+    final originalIdsToDrop = itemsToDrop.map((i) => i.originalId).toSet();
+    // Nếu BẤT KỲ item nào đã tồn tại trong cột đích -> hủy toàn bộ hành động
+    if (targetColumn.items.any(
+      (item) => originalIdsToDrop.contains(item.originalId),
+    )) {
+      debugPrint(
+        'BLoC: Bỏ qua MultiDrop vì có ít nhất một item đã tồn tại trong cột đích.',
+      );
+      return;
+    }
+
+    // Khai báo các biến sẽ được sử dụng
+    List<Item> newItemsForTarget = [];
+
+    // =======================================================================
+    // KỊCH BẢN 1: KÉO TỪ CỘT NGUỒN (DI CHUYỂN LOGIC)
+    // =======================================================================
+    if (fromColumnId == 1) {
+      final idsToMarkAsUsed = itemsToDrop.map((item) => item.id).toSet();
+
+      // 1. Tạo các bản sao mới cho cột đích
+      newItemsForTarget = itemsToDrop
+          .map(
+            (itemToClone) => itemToClone.copyWith(
+              id: _uuid.v4(),
+              columnId: targetColumnId,
+              parentId: null,
+              setNextItemIdToNull: true,
+              isUsed: false, // Item ở cột làm việc không bao giờ "isUsed"
+            ),
+          )
+          .toList();
+
+      // 2. Cập nhật cột nguồn: Đánh dấu các item đã được kéo là "isUsed"
+      final updatedSourceItems = sourceColumn.items.map((sourceItem) {
+        if (idsToMarkAsUsed.contains(sourceItem.id)) {
+          return sourceItem.copyWith(isUsed: true);
+        }
+        return sourceItem;
+      }).toList();
+      sourceColumn = sourceColumn.copyWith(items: updatedSourceItems);
+    }
+    // =======================================================================
+    // KỊCH BẢN 2: KÉO TỪ CỘT LÀM VIỆC (SAO CHÉP VÀ VẼ MŨI TÊN)
+    // =======================================================================
+    else {
+      final Map<String, String> oldIdToNewIdMap = {};
+
+      // 1. Tạo các bản sao mới và map id cũ -> id mới
+      for (final itemToClone in itemsToDrop) {
+        final newItem = itemToClone.copyWith(
+          id: _uuid.v4(),
+          columnId: targetColumnId,
+          parentId: null,
+          setNextItemIdToNull: true,
+          isGroupPlaceholder: false,
+          linkedChildrenOriginalIds: [],
+        );
+        newItemsForTarget.add(newItem);
+        oldIdToNewIdMap[itemToClone.id] = newItem.id;
+      }
+
+      // 2. Cập nhật cột nguồn: Cập nhật nextItemId cho các item gốc để vẽ mũi tên
+      final updatedSourceItems = sourceColumn.items.map((item) {
+        if (oldIdToNewIdMap.containsKey(item.id)) {
+          return item.copyWith(nextItemId: oldIdToNewIdMap[item.id]);
+        }
+        return item;
+      }).toList();
+      sourceColumn = sourceColumn.copyWith(items: updatedSourceItems);
+    }
+
+    // Cập nhật cột đích: Thêm tất cả các item mới đã tạo
+    final updatedTargetItems = List<Item>.from(targetColumn.items)
+      ..addAll(newItemsForTarget);
+    targetColumn = targetColumn.copyWith(items: updatedTargetItems);
+
+    // Cập nhật danh sách cột và emit state mới
+    updatedColumns[fromIndex] = sourceColumn;
+    updatedColumns[toIndex] = targetColumn;
+
+    _logAllColumnsState('MultiDropToColumn', updatedColumns);
+    emit(state.copyWith(columns: updatedColumns));
+  }
+
+  void _onMultiSelectionDropped(
+    MultiSelectionDropped event,
+    Emitter<DragDropState> emit,
+  ) {
+    if (state.selectedItemIds.isEmpty) return;
+
+    // Lấy danh sách các đối tượng Item đầy đủ từ ID đã chọn
+    final List<Item> selectedItems = [];
+    final allItems = state.columns.expand((col) => col.items).toList();
+    for (String id in state.selectedItemIds) {
+      // Dùng firstWhereOrNull từ collection package để an toàn hơn
+      final item = allItems.firstWhere((i) => i.id == id);
+      selectedItems.add(item);
+    }
+
+    if (selectedItems.isEmpty) return;
+
+    final fromColumnId = selectedItems.first.columnId;
+
+    // --- LOGIC PHÂN LOẠI VÀ GỌI HÀM HELPER ---
+
+    // Kịch bản 1: Kéo từ Cột Nguồn (chỉ có thể thả vào nền cột)
+    if (fromColumnId == 1) {
+      if (event.targetItem == null) {
+        _handleMultiDropToColumn(selectedItems, event.targetColumnId, emit);
+      }
+    }
+    // Kịch bản 2: Kéo từ cột làm việc
+    else {
+      final firstParentId = selectedItems.first.potentialParentOriginalId;
+      // Kiểm tra xem tất cả có cùng cha và cha đó có tồn tại không
+      final bool areAllSiblings =
+          firstParentId != null &&
+          selectedItems.every(
+            (item) => item.potentialParentOriginalId == firstParentId,
+          );
+
+      // 2a: Nhóm đồng nhất (cùng cha)
+      if (areAllSiblings) {
+        // Nếu thả vào nền cột
+        if (event.targetItem == null) {
+          _handleMultiDropToColumn(selectedItems, event.targetColumnId, emit);
+        } else {
+          _performMultiItemMerge(selectedItems, event.targetItem!, emit);
+        }
+      }
+      // 2b: Nhóm không đồng nhất (khác cha)
+      else {
+        // Chỉ cho phép thả vào nền cột
+        if (event.targetItem == null) {
+          _handleMultiDropToColumn(selectedItems, event.targetColumnId, emit);
+        }
+        // Nếu thả vào item khác -> không làm gì cả
+      }
+    }
+
+    // Luôn luôn dọn dẹp state chọn nhiều sau khi thả
+    emit(state.copyWith(clearMultiSelectColumn: true, selectedItemIds: {}));
   }
 
   List<ColumnData> _markSourceItemAsUsed(

@@ -90,7 +90,10 @@ class GroupDropped extends DragDropEvent {
   final Item representativeItem;
   final int targetColumnId;
 
-  const GroupDropped({required this.representativeItem, required this.targetColumnId});
+  const GroupDropped({
+    required this.representativeItem,
+    required this.targetColumnId,
+  });
 
   @override
   List<Object> get props => [representativeItem, targetColumnId];
@@ -101,7 +104,10 @@ class MergeGroupRequested extends DragDropEvent {
   final Item representativeItem;
   final Item targetItem;
 
-  const MergeGroupRequested({required this.representativeItem, required this.targetItem});
+  const MergeGroupRequested({
+    required this.representativeItem,
+    required this.targetItem,
+  });
 
   @override
   List<Object> get props => [representativeItem, targetItem];
@@ -114,4 +120,46 @@ class AddNewColumn extends DragDropEvent {
 
   @override
   List<Object> get props => [title]; // <-- CẬP NHẬT PROPS
+}
+
+// Bật/tắt chế độ chọn nhiều cho một cột
+class ToggleMultiSelectMode extends DragDropEvent {
+  final int columnId;
+  const ToggleMultiSelectMode({required this.columnId});
+  @override
+  List<Object> get props => [columnId];
+}
+
+// Chọn hoặc bỏ chọn một item
+class ItemSelectionChanged extends DragDropEvent {
+  final String itemId;
+  final bool isSelected;
+  const ItemSelectionChanged({required this.itemId, required this.isSelected});
+  @override
+  List<Object> get props => [itemId, isSelected];
+}
+
+// Thả một nhóm item đã được chọn
+class MultiSelectionDropped extends DragDropEvent {
+  final int targetColumnId;
+  final Item? targetItem; // Item được thả vào (nếu có)
+  final Item representativeItem; // Một item đại diện để lấy thông tin cột nguồn
+
+  const MultiSelectionDropped({
+    required this.targetColumnId,
+    this.targetItem,
+    required this.representativeItem,
+  });
+
+  @override
+  List<Object> get props {
+    // 1. Sửa kiểu trả về thành List<Object>
+    // 2. Sử dụng "collection if" để chỉ thêm targetItem vào danh sách nếu nó không phải là null
+    return [
+      targetColumnId,
+      if (targetItem != null)
+        targetItem!, // Dấu ! để xác nhận với Dart là nó không null ở đây
+      representativeItem,
+    ];
+  }
 }

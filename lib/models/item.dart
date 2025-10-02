@@ -2,7 +2,7 @@ import 'package:equatable/equatable.dart';
 
 enum DragRole { parent, child }
 
-enum DragMode { single, group }
+enum DragMode { single, group, multiSelect}
 
 class Item extends Equatable {
   final String id;
