@@ -1,7 +1,9 @@
 import 'package:equatable/equatable.dart';
 
 enum DragRole { parent, child }
+
 enum DragMode { single, group }
+
 class Item extends Equatable {
   final String id;
   final String originalId;
@@ -37,7 +39,7 @@ class Item extends Equatable {
     if (parts.length != 4) {
       // Trả về một giá trị mặc định hoặc ném ra lỗi nếu ID không hợp lệ
       // Trả về 0 hoặc 1 là một lựa chọn an toàn.
-      return 1; 
+      return 1;
     }
 
     // Kiểm tra ngược từ cuối lên.
@@ -110,7 +112,8 @@ class Item extends Equatable {
       parentId: setParentIdToNull ? null : (parentId ?? this.parentId),
       nextItemId: setNextItemIdToNull ? null : (nextItemId ?? this.nextItemId),
       isGroupPlaceholder: isGroupPlaceholder ?? this.isGroupPlaceholder,
-      linkedChildrenOriginalIds: linkedChildrenOriginalIds ?? this.linkedChildrenOriginalIds,
+      linkedChildrenOriginalIds:
+          linkedChildrenOriginalIds ?? this.linkedChildrenOriginalIds,
       isUsed: isUsed ?? this.isUsed,
       dragRole: dragRole ?? this.dragRole,
       dragMode: dragMode ?? this.dragMode,
@@ -119,15 +122,15 @@ class Item extends Equatable {
 
   @override
   List<Object?> get props => [
-        id,
-        originalId,
-        name,
-        columnId,
-        parentId,
-        nextItemId,
-        isGroupPlaceholder,
-        linkedChildrenOriginalIds,
-        isUsed,
-        dragMode,
-      ];
+    id,
+    originalId,
+    name,
+    columnId,
+    parentId,
+    nextItemId,
+    isGroupPlaceholder,
+    linkedChildrenOriginalIds,
+    isUsed,
+    dragMode,
+  ];
 }

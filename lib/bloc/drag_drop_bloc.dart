@@ -88,6 +88,36 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
     on<RemoveColumn>(_onRemoveColumn);
   }
 
+  List<ColumnData> _markSourceItemAsUsed(
+    String originalIdToMark,
+    List<ColumnData> currentColumns,
+  ) {
+    var columns = List<ColumnData>.from(currentColumns);
+    final sourceColIndex = columns.indexWhere((c) => c.id == 1);
+    if (sourceColIndex == -1) return columns;
+
+    var sourceColumn = columns[sourceColIndex];
+    bool itemFoundAndMarked = false;
+
+    final updatedSourceItems = sourceColumn.items.map((item) {
+      if (item.originalId == originalIdToMark && !item.isUsed) {
+        debugPrint(
+          '    - Marking source item "${item.name}" (Original ID: $originalIdToMark) as used.',
+        );
+        itemFoundAndMarked = true;
+        return item.copyWith(isUsed: true);
+      }
+      return item;
+    }).toList();
+
+    if (itemFoundAndMarked) {
+      columns[sourceColIndex] = sourceColumn.copyWith(
+        items: updatedSourceItems,
+      );
+    }
+    return columns;
+  }
+
   void _onGroupDropped(GroupDropped event, Emitter<DragDropState> emit) {
     final representativeItem = event.representativeItem;
     final fromColumnId = representativeItem.columnId;
@@ -164,7 +194,6 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
     MergeGroupRequested event,
     Emitter<DragDropState> emit,
   ) {
-    // ... (Phần log đầu vào và tìm item nguồn không đổi)
     final representativeItem = event.representativeItem;
     final targetItem = event.targetItem;
     final fromColumnId = representativeItem.columnId;
@@ -233,15 +262,14 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
     debugPrint('\n  \x1B[33m[3. PHÂN TÍCH KỊCH BẢN & XỬ LÝ CỘT ĐÍCH]\x1B[0m');
     String finalPlaceholderId;
     _MergeScenario scenario;
-    String?
-    targetSiblingSourceId; // <-- THAY ĐỔI 1: Biến lưu ID của item gốc cần cập nhật
+    String? targetSiblingSourceId;
 
-    // ... (Kịch bản 1 và 2 không thay đổi)
+    // KỊCH BẢN 1: Thả vào "cha đại diện" (placeholder) đã có
     if (targetItem.isGroupPlaceholder) {
       scenario = _MergeScenario.mergeIntoExisting;
       debugPrint('  \x1B[36mKỊCH BẢN 1: Gộp vào Placeholder đã có.\x1B[0m');
       finalPlaceholderId = targetItem.id;
-      // ...
+
       final originalLinkedIds = targetItem.linkedChildrenOriginalIds;
       final updatedLinkedIds = {
         ...originalLinkedIds,
@@ -261,13 +289,22 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
             .map((i) => i.id == targetItem.id ? updatedPlaceholder : i)
             .toList(),
       );
-    } else if (targetItem.originalId == parentOriginalId) {
+    }
+    // KỊCH BẢN 2: Thả vào "cha thường" để nâng cấp
+    else if (targetItem.originalId == parentOriginalId) {
       scenario = _MergeScenario.upgradeParent;
       debugPrint(
         '  \x1B[36mKỊCH BẢN 2: Nâng cấp Item cha thành Placeholder.\x1B[0m',
       );
       finalPlaceholderId = targetItem.id;
-      // ...
+
+      // *** LOGIC MỚI: ĐÁNH DẤU CHA Ở NGUỒN LÀ ĐÃ SỬ DỤNG ***
+      updatedColumns = _markSourceItemAsUsed(
+        targetItem.originalId,
+        updatedColumns,
+      );
+      // ******************************************************
+
       final originalLinkedIds = targetItem.linkedChildrenOriginalIds;
       final updatedLinkedIds = {
         ...originalLinkedIds,
@@ -296,7 +333,6 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
         '  \x1B[36mKỊCH BẢN 3: Tạo Placeholder mới từ các "anh em".\x1B[0m',
       );
 
-      // <-- THAY ĐỔI 2: Tìm nguồn của target item TRƯỚC KHI xóa nó
       final allItemsInWorkflow = updatedColumns
           .expand((col) => col.items)
           .toList();
@@ -306,13 +342,12 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
         );
         targetSiblingSourceId = sourceOfTarget.id;
         debugPrint(
-          '  - Tìm thấy nguồn của item đích: "\x1B[36m${sourceOfTarget.name}\x1B[0m" (ID: ${targetSiblingSourceId.substring(0, 8)})',
+          '  - Tìm thấy nguồn của item đích: "\x1B[36m${sourceOfTarget.name}\x1B[0m" (ID: ${targetSiblingSourceId!.substring(0, 8)})',
         );
       } catch (e) {
-        // Nếu không có nguồn (ví dụ: nó được kéo từ Cột Nguồn), ID của nó chính là nguồn
         targetSiblingSourceId = targetItem.id;
         debugPrint(
-          '  - Không tìm thấy nguồn, item đích tự là nguồn. (ID: ${targetSiblingSourceId.substring(0, 8)})',
+          '  - Không tìm thấy nguồn, item đích tự là nguồn. (ID: ${targetSiblingSourceId!.substring(0, 8)})',
         );
       }
 
@@ -350,6 +385,13 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
         linkedChildrenOriginalIds: allLinkedIds,
       );
 
+      // *** LOGIC MỚI: ĐÁNH DẤU CHA Ở NGUỒN LÀ ĐÃ SỬ DỤNG ***
+      updatedColumns = _markSourceItemAsUsed(
+        actualParentTemplate.originalId,
+        updatedColumns,
+      );
+      // ******************************************************
+
       targetColumn = targetColumn.copyWith(
         items: (List<Item>.from(targetColumn.items)
           ..removeWhere((i) => i.id == targetItem.id)
@@ -376,7 +418,6 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
       final List<Item> itemsAfterUpdate = updatedColumns[i].items.map((item) {
         String oldNextId = item.nextItemId?.substring(0, 8) ?? 'null';
 
-        // Cập nhật cho các item trong group được kéo
         if (sourceItemIdsToUpdate.contains(item.id)) {
           columnWasUpdated = true;
           debugPrint(
@@ -385,7 +426,6 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
           return item.copyWith(nextItemId: finalPlaceholderId);
         }
 
-        // <-- THAY ĐỔI 3: Sử dụng ID đã lưu để cập nhật đúng item
         if (scenario == _MergeScenario.createNew &&
             targetSiblingSourceId == item.id) {
           columnWasUpdated = true;
@@ -402,7 +442,9 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
       }
     }
 
-    // ... (Phần log cuối và emit state không đổi)
+    // =========================================================================
+    // BƯỚC 5: HOÀN TẤT VÀ EMIT STATE
+    // =========================================================================
     debugPrint('\n  \x1B[33m[5. HOÀN TẤT]\x1B[0m');
     debugPrint(
       '\x1B[35m================= END [_onMergeGroupRequested] =================\x1B[0m\n',
@@ -930,9 +972,7 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
     final targetItem = event.targetItem;
     final toColumnId = targetItem.columnId;
 
-    debugPrint(
-      '\n\n\x1B[35m--- START [_onMergeItemsRequested] (FIXED) --- \x1B[0m',
-    );
+    debugPrint('\n\n\x1B[35m--- START [_onMergeItemsRequested] --- \x1B[0m');
     debugPrint(
       '  \x1B[33mDragged:\x1B[0m "${draggedItem.name}" (ID: ${draggedItem.id.substring(0, 8)}) from Col ${draggedItem.columnId}',
     );
@@ -944,7 +984,7 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
     final toColIndex = updatedColumns.indexWhere((c) => c.id == toColumnId);
     if (toColIndex == -1) return;
 
-    // Kịch bản 1: Thả vào một item "cha đại diện" đã tồn tại
+    // Kịch bản 1: Thả vào một item "cha đại diện" (placeholder) đã tồn tại
     if (targetItem.isGroupPlaceholder) {
       debugPrint(
         '  \x1B[36mSCENARIO 1: Dropping onto an existing Placeholder.\x1B[0m',
@@ -952,12 +992,11 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
       // Tìm và cập nhật cột đích (toColumn)
       var toColumn = updatedColumns[toColIndex];
       final placeholderInTarget = targetItem;
-      final updatedLinkedIds = List<String>.from(
-        placeholderInTarget.linkedChildrenOriginalIds,
-      );
-      if (!updatedLinkedIds.contains(draggedItem.originalId)) {
-        updatedLinkedIds.add(draggedItem.originalId);
-      }
+      final updatedLinkedIds = {
+        ...placeholderInTarget.linkedChildrenOriginalIds,
+        draggedItem.originalId,
+      }.toList(); // Dùng Set để tránh trùng lặp
+
       final updatedPlaceholder = placeholderInTarget.copyWith(
         linkedChildrenOriginalIds: updatedLinkedIds,
       );
@@ -966,7 +1005,7 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
           .toList();
       updatedColumns[toColIndex] = toColumn.copyWith(items: updatedToItems);
 
-      // Tìm và cập nhật cột nguồn (fromColumn)
+      // Tìm và cập nhật cột nguồn (fromColumn) để vẽ mũi tên
       for (var i = 0; i < updatedColumns.length; i++) {
         if (updatedColumns[i].id == draggedItem.columnId) {
           final updatedFromItems = updatedColumns[i].items.map((item) {
@@ -978,7 +1017,7 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
           updatedColumns[i] = updatedColumns[i].copyWith(
             items: updatedFromItems,
           );
-          break; // Đã tìm thấy và cập nhật, thoát vòng lặp
+          break;
         }
       }
 
@@ -993,6 +1032,14 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
       );
       if (actualParentTemplate == null) return;
       debugPrint('  Found common parent: "${actualParentTemplate.name}"');
+
+      // *** LOGIC MỚI: ĐÁNH DẤU CHA Ở NGUỒN LÀ ĐÃ SỬ DỤNG ***
+      // Vì chúng ta sắp "triệu hồi" cha làm placeholder, ta cần đánh dấu nó ở nguồn.
+      updatedColumns = _markSourceItemAsUsed(
+        actualParentTemplate.originalId,
+        updatedColumns,
+      );
+      // ******************************************************
 
       // 1. Tạo item cha đại diện mới
       final newPlaceholderId = _uuid.v4();
@@ -1020,49 +1067,41 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
       debugPrint('  2. Updated target column (ID ${toColumn.id})');
 
       // 3. Xác định ID của các item gốc cần được cập nhật
-      String draggedItemSourceId =
-          draggedItem.id; // Luôn là chính nó vì nó được kéo trực tiếp
-      String targetItemOriginalSourceId =
-          targetItem.id; // Có thể là chính nó hoặc item đã tạo ra nó
-
-      for (final col in state.columns) {
-        for (final item in col.items) {
-          if (item.nextItemId == targetItem.id) {
-            targetItemOriginalSourceId = item.id;
-            debugPrint(
-              '  3a. Found original source of targetItem: "${item.name}" (ID: ${item.id.substring(0, 8)})',
-            );
-            break;
-          }
-        }
-        if (targetItemOriginalSourceId != targetItem.id) break;
+      final String draggedItemSourceId = draggedItem.id;
+      String targetItemSourceId = targetItem.id; // Mặc định
+      final allItems = updatedColumns.expand((col) => col.items).toList();
+      try {
+        final source = allItems.firstWhere(
+          (item) => item.nextItemId == targetItem.id,
+        );
+        targetItemSourceId = source.id;
+      } catch (e) {
+        // Không tìm thấy, nghĩa là targetItem tự là nguồn
       }
 
-      // 4. Duyệt qua tất cả các cột một lần duy nhất và cập nhật tất cả các item gốc
       debugPrint(
-        '  4. Updating source items... (Dragged Source ID: ${draggedItemSourceId.substring(0, 8)}, Target Source ID: ${targetItemOriginalSourceId.substring(0, 8)})',
+        '  3. Found source IDs to update: Dragged=${draggedItemSourceId.substring(0, 8)}, Target=${targetItemSourceId.substring(0, 8)}',
       );
+
+      // 4. Duyệt qua tất cả các cột và cập nhật tất cả các item gốc
+      debugPrint('  4. Updating source items...');
       for (var i = 0; i < updatedColumns.length; i++) {
         bool columnWasUpdated = false;
         final List<Item> itemsAfterUpdate = updatedColumns[i].items.map((item) {
-          // === LOGIC SỬA LỖI QUAN TRỌNG ===
-          // Chỉ tạo mũi tên (cập nhật nextItemId) nếu item gốc không nằm ở Cột Nguồn
-          if (item.id == draggedItemSourceId && item.columnId > 1) {
+          if (item.id == draggedItemSourceId) {
             debugPrint(
               '    - Updating dragged source in Col ${updatedColumns[i].id}',
             );
             columnWasUpdated = true;
             return item.copyWith(nextItemId: newPlaceholderId);
           }
-          if (item.id == targetItemOriginalSourceId && item.columnId > 1) {
+          if (item.id == targetItemSourceId) {
             debugPrint(
               '    - Updating target source in Col ${updatedColumns[i].id}',
             );
             columnWasUpdated = true;
             return item.copyWith(nextItemId: newPlaceholderId);
           }
-          // ===============================
-
           return item;
         }).toList();
 
@@ -1117,6 +1156,13 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
     );
     if (targetColIndex == -1) return;
 
+    // Vì parentTargetItem sắp được nâng cấp thành placeholder, ta cần đánh dấu nó ở nguồn.
+    updatedColumns = _markSourceItemAsUsed(
+      parentTargetItem.originalId,
+      updatedColumns,
+    );
+    // ******************************************************
+
     // 1. "Nâng cấp" item cha trong cột đích
     var targetColumn = updatedColumns[targetColIndex];
     final upgradedParent = parentTargetItem.copyWith(
@@ -1144,9 +1190,9 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
     );
 
     // 2. Cập nhật `nextItemId` cho item con gốc
-    // (Logic này có thể được tách ra thành hàm helper để tái sử dụng)
     debugPrint('  2. Updating source of child item...');
     for (var i = 0; i < updatedColumns.length; i++) {
+      // Chỉ cần tìm trong cột nguồn của childItem là đủ
       if (updatedColumns[i].id == childItem.columnId) {
         final updatedSourceItems = updatedColumns[i].items.map((item) {
           if (item.id == childItem.id) {
@@ -1160,7 +1206,7 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
         updatedColumns[i] = updatedColumns[i].copyWith(
           items: updatedSourceItems,
         );
-        break;
+        break; // Đã tìm thấy và cập nhật, thoát vòng lặp
       }
     }
 
@@ -1176,7 +1222,9 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
     debugPrint('  Column to remove: ID $columnIdToRemove');
 
     List<ColumnData> updatedColumns = List.from(state.columns);
-    final columnToRemoveIndex = updatedColumns.indexWhere((c) => c.id == columnIdToRemove);
+    final columnToRemoveIndex = updatedColumns.indexWhere(
+      (c) => c.id == columnIdToRemove,
+    );
     if (columnToRemoveIndex == -1) return;
 
     final columnToRemove = updatedColumns[columnToRemoveIndex];
@@ -1186,47 +1234,58 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
     // BƯỚC 1: Dọn dẹp liên kết ngược (nextItemId)
     // (Không thay đổi)
     // ================================================================
-    debugPrint('  1. Cleaning up all backward links (nextItemId) pointing to this column...');
+    debugPrint(
+      '  1. Cleaning up all backward links (nextItemId) pointing to this column...',
+    );
     final idsInColumnToRemove = itemsInColumn.map((i) => i.id).toSet();
     if (idsInColumnToRemove.isNotEmpty) {
-        for (var i = 0; i < updatedColumns.length; i++) {
-            if (i == columnToRemoveIndex) continue;
+      for (var i = 0; i < updatedColumns.length; i++) {
+        if (i == columnToRemoveIndex) continue;
 
-            bool columnWasUpdated = false;
-            final List<Item> cleanedItems = updatedColumns[i].items.map((item) {
-                if (item.nextItemId != null && idsInColumnToRemove.contains(item.nextItemId)) {
-                    debugPrint('    - Found link from "${item.name}" (in Col ${updatedColumns[i].id}). Resetting nextItemId.');
-                    columnWasUpdated = true;
-                    return item.copyWith(setNextItemIdToNull: true);
-                }
-                return item;
-            }).toList();
-            if (columnWasUpdated) {
-                updatedColumns[i] = updatedColumns[i].copyWith(items: cleanedItems);
-            }
+        bool columnWasUpdated = false;
+        final List<Item> cleanedItems = updatedColumns[i].items.map((item) {
+          if (item.nextItemId != null &&
+              idsInColumnToRemove.contains(item.nextItemId)) {
+            debugPrint(
+              '    - Found link from "${item.name}" (in Col ${updatedColumns[i].id}). Resetting nextItemId.',
+            );
+            columnWasUpdated = true;
+            return item.copyWith(setNextItemIdToNull: true);
+          }
+          return item;
+        }).toList();
+        if (columnWasUpdated) {
+          updatedColumns[i] = updatedColumns[i].copyWith(items: cleanedItems);
         }
+      }
     }
-    
+
     // ================================================================
     // BƯỚC 1.5: CẬP NHẬT PLACEHOLDER CHA (LOGIC MỚI)
     // ================================================================
     debugPrint('  1.5. Updating parent placeholders...');
-    final originalIdsInColumnToRemove = itemsInColumn.map((i) => i.originalId).toSet();
+    final originalIdsInColumnToRemove = itemsInColumn
+        .map((i) => i.originalId)
+        .toSet();
     if (originalIdsInColumnToRemove.isNotEmpty) {
       for (var i = 0; i < updatedColumns.length; i++) {
         // Không cần kiểm tra cột sắp bị xóa, vì placeholder không thể tự chứa con
-        if (i == columnToRemoveIndex) continue; 
-        
+        if (i == columnToRemoveIndex) continue;
+
         bool wasUpdated = false;
         final List<Item> updatedItems = updatedColumns[i].items.map((item) {
           if (item.isGroupPlaceholder) {
             final originalLinks = item.linkedChildrenOriginalIds.toSet();
             // Tìm những originalId chung giữa placeholder và cột bị xóa
-            final commonIds = originalLinks.intersection(originalIdsInColumnToRemove);
+            final commonIds = originalLinks.intersection(
+              originalIdsInColumnToRemove,
+            );
 
             if (commonIds.isNotEmpty) {
               final newLinks = originalLinks.difference(commonIds).toList();
-              debugPrint('    - Placeholder "${item.name}" (in Col ${item.columnId}) is losing children: $commonIds');
+              debugPrint(
+                '    - Placeholder "${item.name}" (in Col ${item.columnId}) is losing children: $commonIds',
+              );
               debugPrint('    - New links: $newLinks');
               wasUpdated = true;
               return item.copyWith(linkedChildrenOriginalIds: newLinks);
@@ -1236,11 +1295,10 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
         }).toList();
 
         if (wasUpdated) {
-            updatedColumns[i] = updatedColumns[i].copyWith(items: updatedItems);
+          updatedColumns[i] = updatedColumns[i].copyWith(items: updatedItems);
         }
       }
     }
-
 
     // ================================================================
     // BƯỚC 2: Hồi sinh item nguồn
@@ -1253,13 +1311,17 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
         .toList();
 
     for (final item in itemsInColumn) {
-        final originalId = item.originalId;
-        final bool instanceExistsElsewhere = allOtherWorkingItems.any((i) => i.originalId == originalId);
-        
-        if (!instanceExistsElsewhere) {
-            debugPrint('    - Item "${item.name}" was the last instance. Reviving in source.');
-            updatedColumns = _revertIsUsedInSource(originalId, updatedColumns);
-        }
+      final originalId = item.originalId;
+      final bool instanceExistsElsewhere = allOtherWorkingItems.any(
+        (i) => i.originalId == originalId,
+      );
+
+      if (!instanceExistsElsewhere) {
+        debugPrint(
+          '    - Item "${item.name}" was the last instance. Reviving in source.',
+        );
+        updatedColumns = _revertIsUsedInSource(originalId, updatedColumns);
+      }
     }
 
     // ================================================================
@@ -1271,7 +1333,7 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
 
     _logAllColumnsState('RemoveColumn', updatedColumns);
     emit(state.copyWith(columns: updatedColumns));
-}
+  }
 
   void _onLevelFilterChanged(
     LevelFilterChanged event,

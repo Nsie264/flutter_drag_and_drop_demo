@@ -128,7 +128,7 @@ class WorkflowItemWidget extends StatelessWidget {
                   );
                 },
                 splashRadius: item.isGroupPlaceholder ? 10 : 5,
-                tooltip: item.isGroupPlaceholder ? 'Xóa nhóm' : 'Xóa item',
+                tooltip: item.isGroupPlaceholder ? 'Xóa tổ' : 'Xóa chi tiết',
               ),
             ),
           ],
@@ -287,13 +287,10 @@ class WorkflowItemWidget extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                       color: isLinked ? Colors.black54 : Colors.black,
-                      decoration: isLinked ? TextDecoration.lineThrough : TextDecoration.none,
                     ),
                   ),
                 ),
               ),
-              if(isLinked)
-                const Icon(Icons.link, size: 18, color: Colors.black54),
             ],
           ),
           const SizedBox(height: 8),
