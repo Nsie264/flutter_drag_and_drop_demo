@@ -32,9 +32,7 @@ class LineAndArrowPainter extends CustomPainter {
     for (final fromItem in allItems) {
       if (fromItem.nextItemId == null) continue;
 
-      final toItem = allItems.firstWhere(
-        (i) => i.id == fromItem.nextItemId,
-      );
+      final toItem = allItems.firstWhere((i) => i.id == fromItem.nextItemId);
       if (fromItem.columnId <= 1 || toItem.columnId <= 1) {
         continue;
       }
@@ -56,10 +54,6 @@ class LineAndArrowPainter extends CustomPainter {
       final startPoint = stackBox.globalToLocal(globalStart);
       final endPoint = stackBox.globalToLocal(globalEnd);
 
-      debugPrint("Line from '${fromItem.name}' → '${toItem.name}'");
-      debugPrint("  StartPoint: $startPoint");
-      debugPrint("  EndPoint: $endPoint");
-
       // ================================
       // CẮT LINE QUA TẤT CẢ ITEM
       // ================================
@@ -80,18 +74,12 @@ class LineAndArrowPainter extends CustomPainter {
           itemBox.size.height,
         );
 
-        debugPrint("  Checking item '${entry.key}' at $rect");
-
         List<Offset> newSegments = [];
         for (int i = 0; i < segments.length; i += 2) {
           final seg = _clipLineWithRect(segments[i], segments[i + 1], rect);
           if (seg.isNotEmpty) {
             newSegments.addAll(seg);
-          } else {
-            debugPrint(
-              "    Segment ${segments[i]} → ${segments[i + 1]} removed (inside rect)",
-            );
-          }
+          } else {}
         }
         segments = newSegments;
       }
@@ -102,8 +90,6 @@ class LineAndArrowPainter extends CustomPainter {
       for (int i = 0; i < segments.length; i += 2) {
         final segStart = segments[i];
         final segEnd = segments[i + 1];
-
-        debugPrint("  Drawing segment: $segStart → $segEnd");
 
         final linePath = Path()
           ..moveTo(segStart.dx, segStart.dy)
@@ -223,8 +209,6 @@ class LineAndArrowPainter extends CustomPainter {
     arrowHeadPath.lineTo(end.dx, end.dy);
 
     canvas.drawPath(arrowHeadPath, paint);
-
-    debugPrint("  ArrowHead drawn at $end with angle=$angle");
   }
 
   @override
