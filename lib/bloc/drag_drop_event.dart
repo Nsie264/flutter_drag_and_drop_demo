@@ -163,3 +163,13 @@ class MultiSelectionDropped extends DragDropEvent {
     ];
   }
 }
+
+// NEW: Event được gửi khi người dùng double click vào một item.
+class HighlightChainRequested extends DragDropEvent {
+  final String itemId;
+
+  const HighlightChainRequested({required this.itemId});
+
+  @override
+  List<Object> get props => [itemId];
+}

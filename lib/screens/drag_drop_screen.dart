@@ -326,6 +326,7 @@ class _DragDropScreenState extends State<DragDropScreen> {
                                           allItems: allItems,
                                           itemKeys: _itemKeys,
                                           stackKey: _customPaintAreaKey,
+                                          highlightedItemIds: state.highlightedItemIds,
                                         ),
                                       ),
                                     ),

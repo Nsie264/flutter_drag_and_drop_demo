@@ -90,6 +90,64 @@ class DragDropBloc extends Bloc<DragDropEvent, DragDropState> {
 
     on<AddNewColumn>(_onAddNewColumn);
     on<RemoveColumn>(_onRemoveColumn);
+
+    on<HighlightChainRequested>(_onHighlightChainRequested);
+  }
+
+  void _onHighlightChainRequested(HighlightChainRequested event, Emitter<DragDropState> emit) {
+    // Logic tắt highlight: Nếu item được click đã có trong chuỗi, xóa highlight.
+    if (state.highlightedItemIds.contains(event.itemId)) {
+      emit(state.copyWith(highlightedItemIds: {}));
+      return;
+    }
+
+    final allItems = state.columns.expand((col) => col.items).toList();
+    final Map<String, Item> itemsById = {for (var item in allItems) item.id: item};
+    
+    // --- BƯỚC 1: Xây dựng bản đồ các kết nối ngược (N-to-1) ---
+    // Key: ID của item đích (toItem)
+    // Value: Danh sách các ID của item nguồn (fromItem) trỏ đến nó.
+    // Điều này cực kỳ quan trọng để xử lý trường hợp nhiều item con trỏ vào một placeholder.
+    final Map<String, List<String>> previousItemsMap = {};
+    for (final item in allItems) {
+      if (item.nextItemId != null) {
+        // Nếu key chưa tồn tại, tạo một list mới.
+        // Nếu đã tồn tại, thêm id của item hiện tại vào list.
+        previousItemsMap.putIfAbsent(item.nextItemId!, () => []).add(item.id);
+      }
+    }
+
+    // --- BƯỚC 2: Thuật toán duyệt đồ thị (BFS) để tìm tất cả các nút kết nối ---
+    final Set<String> visitedIds = {}; // Các ID đã duyệt để tránh lặp vô hạn
+    final List<String> queue = [event.itemId]; // Hàng đợi bắt đầu với item được click
+    visitedIds.add(event.itemId);
+
+    while (queue.isNotEmpty) {
+      final currentId = queue.removeAt(0); // Lấy item đầu tiên từ hàng đợi
+      final currentItem = itemsById[currentId];
+
+      if (currentItem == null) continue;
+
+      // 1. Duyệt xuôi dòng (Forward traversal)
+      if (currentItem.nextItemId != null && !visitedIds.contains(currentItem.nextItemId!)) {
+        visitedIds.add(currentItem.nextItemId!);
+        queue.add(currentItem.nextItemId!);
+      }
+
+      // 2. Duyệt ngược dòng (Backward traversal) - Sử dụng bản đồ đã tạo
+      // Điều này sẽ tự động xử lý trường hợp "hội tụ" vào placeholder.
+      if (previousItemsMap.containsKey(currentId)) {
+        for (final prevId in previousItemsMap[currentId]!) {
+          if (!visitedIds.contains(prevId)) {
+            visitedIds.add(prevId);
+            queue.add(prevId);
+          }
+        }
+      }
+    }
+
+    // Cập nhật state với toàn bộ đồ thị con đã được duyệt
+    emit(state.copyWith(highlightedItemIds: visitedIds));
   }
 
   void _performMultiItemMerge(

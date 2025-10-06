@@ -6,6 +6,8 @@ class DragDropState extends Equatable {
   final List<ColumnData> columns;
   final int? multiSelectActiveColumnId;
   final Set<String> selectedItemIds;
+
+  final Set<String> highlightedItemIds;
   
   // Level bắt đầu để hiển thị (ví dụ: 1 -> hiển thị level 1 và 2)
   final int displayLevelStart; 
@@ -16,6 +18,7 @@ class DragDropState extends Equatable {
     this.displayLevelStart = 1,
     this.multiSelectActiveColumnId,
     this.selectedItemIds = const {},
+    this.highlightedItemIds = const {},
   });
 
   ColumnData get sourceColumn =>
@@ -28,6 +31,7 @@ class DragDropState extends Equatable {
     int? multiSelectActiveColumnId,
     Set<String>? selectedItemIds,
     bool clearMultiSelectColumn = false,
+    Set<String>? highlightedItemIds,
   }) {
     return DragDropState(
       masterItems: masterItems ?? this.masterItems,
@@ -35,9 +39,10 @@ class DragDropState extends Equatable {
       displayLevelStart: displayLevelStart ?? this.displayLevelStart,
       multiSelectActiveColumnId: clearMultiSelectColumn ? null : multiSelectActiveColumnId ?? this.multiSelectActiveColumnId,
       selectedItemIds: selectedItemIds ?? this.selectedItemIds,
+      highlightedItemIds: highlightedItemIds ?? this.highlightedItemIds,
     );
   }
 
   @override
-  List<Object?> get props => [masterItems, columns, displayLevelStart, multiSelectActiveColumnId, selectedItemIds];
+  List<Object?> get props => [masterItems, columns, displayLevelStart, multiSelectActiveColumnId, selectedItemIds, highlightedItemIds];
 }
