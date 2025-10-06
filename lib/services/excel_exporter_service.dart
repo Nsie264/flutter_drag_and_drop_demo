@@ -17,11 +17,16 @@ class ExcelExporterService {
         'ID gốc',
         'Tên',
         'Số lượng',
-        'Nhân công tiếp theo'
+        'Nhân công tiếp theo',
       ];
-       final List<CellValue> headers = headerStrings.map((h) => TextCellValue(h)).toList();
+      final List<CellValue> headers = headerStrings
+          .map((h) => TextCellValue(h))
+          .toList();
       sheet.appendRow(headers);
 
+      for (int i = 0; i < headerStrings.length; i++) {
+        sheet.setColumnAutoFit(i);
+      }
       // 3. Lặp qua các cột làm việc và các item để thêm dữ liệu
       for (final column in columns) {
         // Chỉ xuất dữ liệu từ các cột workflow
@@ -34,7 +39,9 @@ class ExcelExporterService {
             TextCellValue(item.originalId),
             TextCellValue(item.name),
             IntCellValue(item.quantity),
-            item.nextItemId != null ? TextCellValue(item.nextItemId!) : TextCellValue(''),
+            item.nextItemId != null
+                ? TextCellValue(item.nextItemId!)
+                : TextCellValue(''),
           ];
           sheet.appendRow(rowData);
         }
