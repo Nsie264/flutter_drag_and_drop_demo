@@ -16,6 +16,7 @@ class Item extends Equatable {
   final bool isUsed;
   final DragRole dragRole;
   final DragMode dragMode;
+  final int quantity;
 
   const Item({
     required this.id,
@@ -29,6 +30,7 @@ class Item extends Equatable {
     this.isUsed = false,
     this.dragRole = DragRole.child,
     this.dragMode = DragMode.single,
+    this.quantity = 1,
   });
 
   // Getter để tính toán level từ originalId
@@ -103,6 +105,7 @@ class Item extends Equatable {
     bool? isUsed,
     DragRole? dragRole,
     DragMode? dragMode,
+    int? quantity,
   }) {
     return Item(
       id: id ?? this.id,
@@ -117,6 +120,7 @@ class Item extends Equatable {
       isUsed: isUsed ?? this.isUsed,
       dragRole: dragRole ?? this.dragRole,
       dragMode: dragMode ?? this.dragMode,
+      quantity: quantity ?? this.quantity,
     );
   }
 
@@ -132,5 +136,6 @@ class Item extends Equatable {
     linkedChildrenOriginalIds,
     isUsed,
     dragMode,
+    quantity
   ];
 }

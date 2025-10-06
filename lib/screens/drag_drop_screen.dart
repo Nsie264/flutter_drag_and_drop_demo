@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:drag_and_drop/bloc/drag_drop_bloc.dart';
+import 'package:drag_and_drop/services/excel_exporter_service.dart';
 import 'package:drag_and_drop/services/excel_parser.dart';
 import 'package:drag_and_drop/widgets/column_widget.dart';
 import 'package:drag_and_drop/widgets/line_painter.dart';
@@ -39,6 +40,39 @@ class _DragDropScreenState extends State<DragDropScreen> {
     _workingAreaHorizontalScrollController.dispose();
     _workingAreaVerticalScrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _exportData() async {
+    // Hiển thị loading indicator (tùy chọn)
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Đang chuẩn bị file Excel...')),
+    );
+
+    try {
+      final exporter = ExcelExporterService();
+      final columns = context.read<DragDropBloc>().state.columns;
+      await exporter.exportWorkflow(columns);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('File đã sẵn sàng để tải xuống.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Xuất file thất bại: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _showAddColumnDialog() async {
@@ -208,14 +242,23 @@ class _DragDropScreenState extends State<DragDropScreen> {
                       ),
                     ),
                     Spacer(),
-                    Text(
-                      "Tải lên file Excel",
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    IconButton(
+                    ElevatedButton.icon
+                    (
                       icon: const Icon(Icons.upload_file),
                       onPressed: _pickAndProcessFile,
-                      tooltip: 'Tải lên file Excel',
+                      label: Text('Tải lên file Excel'),
+                    ),
+                    const SizedBox(width: 16),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.download),
+                      label: const Text('Xuất Excel'),
+                      onPressed: state.isExportEnabled ? _exportData : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: state.isExportEnabled
+                            ? Colors.green
+                            : Colors.grey,
+                        foregroundColor: Colors.white,
+                      ),
                     ),
                   ],
                 ),
@@ -301,7 +344,8 @@ class _DragDropScreenState extends State<DragDropScreen> {
                                                       label: const Text(
                                                         'Thêm Cột',
                                                       ),
-                                                      onPressed: _showAddColumnDialog,
+                                                      onPressed:
+                                                          _showAddColumnDialog,
                                                       style: ElevatedButton.styleFrom(
                                                         padding:
                                                             const EdgeInsets.symmetric(
@@ -326,7 +370,8 @@ class _DragDropScreenState extends State<DragDropScreen> {
                                           allItems: allItems,
                                           itemKeys: _itemKeys,
                                           stackKey: _customPaintAreaKey,
-                                          highlightedItemIds: state.highlightedItemIds,
+                                          highlightedItemIds:
+                                              state.highlightedItemIds,
                                         ),
                                       ),
                                     ),

@@ -23,7 +23,8 @@ class ExcelDataParser {
       final level2Name = _getCellValue(row[1]);
       final level3Name = _getCellValue(row[2]);
       final level4Name = _getCellValue(row[3]);
-      debugPrint('  Dữ liệu thô: "$level1Name" | "$level2Name" | "$level3Name" | "$level4Name"');
+      final quantity = int.tryParse(_getCellValue(row[4])) ?? 1;
+      debugPrint('  Dữ liệu thô: "$level1Name" | "$level2Name" | "$level3Name" | "$level4Name" | "$quantity"');
 
       if (level1Name.isEmpty) continue;
 
@@ -31,7 +32,7 @@ class ExcelDataParser {
       if (!level1Tracker.containsKey(level1Name)) {
         level1Counter++;
         level1Tracker[level1Name] = _HierarchyNode(idPart: _formatId(level1Counter));
-        masterItems.add(Item(id: '', originalId: '${level1Tracker[level1Name]!.idPart}-00-00-000', name: level1Name, columnId: 0));
+        masterItems.add(Item(id: '', originalId: '${level1Tracker[level1Name]!.idPart}-00-00-000', name: level1Name, columnId: 0, quantity: quantity));
         debugPrint('  \x1B[32m-> Tạo MỚI Level 1:\x1B[0m "$level1Name" (ID part: ${level1Tracker[level1Name]!.idPart})');
       }
       final l1Node = level1Tracker[level1Name]!;
@@ -44,7 +45,7 @@ class ExcelDataParser {
         l2IdPart = l1Node.children.putIfAbsent(level2Name, () {
           l1Node.counter++;
           final newIdPart = _formatId(l1Node.counter);
-          masterItems.add(Item(id: '', originalId: '$l1IdPart-$newIdPart-00-000', name: level2Name, columnId: 0));
+          masterItems.add(Item(id: '', originalId: '$l1IdPart-$newIdPart-00-000', name: level2Name, columnId: 0, quantity: quantity));
           debugPrint('  \x1B[32m-> Tạo MỚI Level 2:\x1B[0m "$level2Name" (ID part: $newIdPart)');
           return _HierarchyNode(idPart: newIdPart);
         }).idPart;
@@ -65,7 +66,7 @@ class ExcelDataParser {
         l3IdPart = l2Node.children.putIfAbsent(level3Name, () {
           l2Node.counter++;
           final newIdPart = _formatId(l2Node.counter);
-          masterItems.add(Item(id: '', originalId: '$l1IdPart-$l2IdPart-$newIdPart-000', name: level3Name, columnId: 0));
+          masterItems.add(Item(id: '', originalId: '$l1IdPart-$l2IdPart-$newIdPart-000', name: level3Name, columnId: 0, quantity: quantity));
           debugPrint('  \x1B[32m-> Tạo MỚI Level 3:\x1B[0m "$level3Name" (ID part: $newIdPart)');
           return _HierarchyNode(idPart: newIdPart);
         }).idPart;
@@ -83,7 +84,7 @@ class ExcelDataParser {
         l3Node.children.putIfAbsent(level4Name, () {
           l3Node.counter++;
           final l4IdPart = l3Node.counter.toString().padLeft(3, '0');
-          masterItems.add(Item(id: '', originalId: '$l1IdPart-$l2IdPart-$l3IdPart-$l4IdPart', name: level4Name, columnId: 0));
+          masterItems.add(Item(id: '', originalId: '$l1IdPart-$l2IdPart-$l3IdPart-$l4IdPart', name: level4Name, columnId: 0, quantity: quantity));
           debugPrint('  \x1B[32m-> Tạo MỚI Level 4:\x1B[0m "$level4Name" (originalId: $l1IdPart-$l2IdPart-$l3IdPart-$l4IdPart)');
           return _HierarchyNode(idPart: l4IdPart);
         });

@@ -8,9 +8,9 @@ class DragDropState extends Equatable {
   final Set<String> selectedItemIds;
 
   final Set<String> highlightedItemIds;
-  
+
   // Level bắt đầu để hiển thị (ví dụ: 1 -> hiển thị level 1 và 2)
-  final int displayLevelStart; 
+  final int displayLevelStart;
 
   const DragDropState({
     this.masterItems = const [],
@@ -21,8 +21,16 @@ class DragDropState extends Equatable {
     this.highlightedItemIds = const {},
   });
 
-  ColumnData get sourceColumn =>
-      columns.isNotEmpty ? columns.first : const ColumnData(id: 1, title: 'Nguồn');
+  ColumnData get sourceColumn => columns.isNotEmpty
+      ? columns.first
+      : const ColumnData(id: 1, title: 'Nguồn');
+
+  bool get isExportEnabled {
+    if (sourceColumn.items.isEmpty) {
+      return false;
+    }
+    return sourceColumn.items.every((item) => item.isUsed);
+  }
 
   DragDropState copyWith({
     List<Item>? masterItems,
@@ -37,12 +45,21 @@ class DragDropState extends Equatable {
       masterItems: masterItems ?? this.masterItems,
       columns: columns ?? this.columns,
       displayLevelStart: displayLevelStart ?? this.displayLevelStart,
-      multiSelectActiveColumnId: clearMultiSelectColumn ? null : multiSelectActiveColumnId ?? this.multiSelectActiveColumnId,
+      multiSelectActiveColumnId: clearMultiSelectColumn
+          ? null
+          : multiSelectActiveColumnId ?? this.multiSelectActiveColumnId,
       selectedItemIds: selectedItemIds ?? this.selectedItemIds,
       highlightedItemIds: highlightedItemIds ?? this.highlightedItemIds,
     );
   }
 
   @override
-  List<Object?> get props => [masterItems, columns, displayLevelStart, multiSelectActiveColumnId, selectedItemIds, highlightedItemIds];
+  List<Object?> get props => [
+    masterItems,
+    columns,
+    displayLevelStart,
+    multiSelectActiveColumnId,
+    selectedItemIds,
+    highlightedItemIds,
+  ];
 }
