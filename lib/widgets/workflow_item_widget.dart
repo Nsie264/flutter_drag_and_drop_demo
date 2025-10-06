@@ -5,6 +5,8 @@ import 'package:drag_and_drop/cubit/drag_cubit.dart';
 import 'package:drag_and_drop/models/item.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'dart:html' as html;
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class WorkflowItemWidget extends StatelessWidget {
   final Item item;
@@ -184,8 +186,10 @@ class WorkflowItemWidget extends StatelessWidget {
     );
 
     Widget interactiveWrapper = GestureDetector(
-      onDoubleTap:
-          (item.columnId > 1) // Chỉ cho phép double click ở cột workflow
+      onSecondaryTapDown: (details) {
+        if(kIsWeb) html.document.onContextMenu.listen((event) => event.preventDefault());
+      },
+      onSecondaryTap: (item.columnId > 1)
           ? () {
               context.read<DragDropBloc>().add(
                 HighlightChainRequested(itemId: item.id),

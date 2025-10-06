@@ -8,7 +8,7 @@ class ExcelExporterService {
     try {
       // 1. Tạo một workbook Excel mới
       final excel = Excel.createExcel();
-      final Sheet sheet = excel['Workflow'];
+      Sheet sheet = excel.sheets.values.first;
 
       // 2. Thêm dòng tiêu đề
       final List<String> headerStrings = [

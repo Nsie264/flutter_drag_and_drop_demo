@@ -50,7 +50,7 @@ Widget _buildSourceItemTile(
   );
 
   // Bọc nội dung trong một Row nếu ở chế độ chọn nhiều
-  Widget finalLayout = isMultiSelectModeActive && isEligible
+  Widget finalLayout = isMultiSelectModeActive && isEligible && !isParentRole
       ? Row(
           children: [
             Checkbox(
